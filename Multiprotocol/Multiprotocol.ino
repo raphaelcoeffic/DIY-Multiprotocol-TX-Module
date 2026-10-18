@@ -42,6 +42,11 @@
 #include "_MyConfig.h"
 #endif
 
+//Bench mode config: keeps only the protocols used by the bench
+#if defined(MULTI_BENCH)
+#include "_Bench_Config.h"
+#endif
+
 #include "Pins.h"
 #include "TX_Def.h"
 #include "Validate.h"
@@ -694,6 +699,10 @@ void loop()
 { 
 	uint16_t next_callback, diff;
 	uint8_t count=0;
+
+	#ifdef MULTI_BENCH
+		Bench_loop();							// Never returns
+	#endif
 
 	while(1)
 	{
