@@ -40,6 +40,11 @@
 	#define DEBUG_SERIAL
 #endif
 
+// Bench mode is driven through the debug serial port
+#if defined(MULTI_BENCH) && ( not defined(STM32_BOARD) || not defined(DEBUG_SERIAL) )
+	#error "MULTI_BENCH requires an STM32 module and a debug build (Native USB or Serial/FTDI Debugging)."
+#endif
+
 // Error if CHECK_FOR_BOOTLOADER is not enabled but a FLASH_FROM_TX board is selected
 #if (defined(ARDUINO_MULTI_FLASH_FROM_TX) || defined(ARDUINO_MULTI_STM32_FLASH_FROM_TX)) &! defined(CHECK_FOR_BOOTLOADER)
 	#if defined(STM32_BOARD)
