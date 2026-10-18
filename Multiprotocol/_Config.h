@@ -26,6 +26,15 @@
 //#define USE_MY_CONFIG
 
 
+/******************/
+/*** BENCH MODE ***/
+/******************/
+//Replaces the normal operation by a command interpreter on the debug serial port to drive the RF chips directly.
+//Used to test over-the-air interoperability with other hardware, see _Bench.ino for the commands.
+//Only for STM32 modules compiled with a debug option. Most protocols are removed by _Bench_Config.h to fit in flash.
+//#define MULTI_BENCH
+
+
 /*************************/
 /*** BOOTLOADER USE     ***/
 /*************************/
