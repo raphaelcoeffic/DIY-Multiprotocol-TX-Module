@@ -55,6 +55,7 @@
    stop                         stop the current job             -> @ok stop tx=<n> rx=<n> err=<n> [out_drop=<n>]
    chan <i> <value>             Channel_data[i] (0..2047) used by "proto"
    proto <num> [sub] [rxnum] [option] [bind]  run a built-in protocol of the table
+   id [value]                   module id of "proto" (MProtocol_id_master) -> @ok id=<hex>
    user [hex]                   run Bench_user_init(hex)/Bench_user_callback() from _Bench_User.ino
 
  Host tool, build script, examples, interoperability tests and results:
@@ -1206,6 +1207,12 @@ static void bench_exec(char *line)
 		bench_printf("@ok\r\n");
 	}
 	else if(strcmp(cmd, "rx") == 0)		bench_cmd_rx(args);
+	else if(strcmp(cmd, "id") == 0)
+	{
+		if(bench_number(&args, &val))
+			MProtocol_id_master = val;
+		bench_printf("@ok id=%08lx\r\n", MProtocol_id_master);
+	}
 	else if(strcmp(cmd, "ackpl") == 0)
 	{ // NRF ack payload, none to clear
 		int16_t len = bench_hex(&args, bench_ack_pl, sizeof(bench_ack_pl));
@@ -1228,6 +1235,7 @@ static void bench_exec(char *line)
 		else
 		{
 			Channel_data[val] = value;
+			update_channels_aux();			// CH5_SW..CH12_SW, as Update_All()
 			bench_printf("@ok\r\n");
 		}
 	}
