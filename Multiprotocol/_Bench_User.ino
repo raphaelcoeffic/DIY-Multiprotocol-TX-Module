@@ -77,7 +77,7 @@ uint16_t Bench_user_callback()
 			{
 				bench_printf("@ev pong %u %lu ", ping_seq, micros() - ping_start);
 				bench_print_hex(buf, len);
-				Serial.write("\r\n");
+				bench_puts("\r\n");
 			}
 			else if(micros() - ping_start < (uint32_t)ping_timeout_ms * 1000)
 				return 100;
