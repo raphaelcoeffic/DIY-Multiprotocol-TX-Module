@@ -130,3 +130,8 @@
 // Not needed on the bench
 #undef	SEND_CPPM
 #undef	ENABLE_DIRECT_INPUTS
+
+// DSM: the CYRF6936 MFG ID of the "cyrfid" command (RAM only, the EEPROM copy
+// is not used), the chip's until set
+uint8_t *bench_cyrf_id();
+#define FORCE_CYRF_ID bench_cyrf_id()
