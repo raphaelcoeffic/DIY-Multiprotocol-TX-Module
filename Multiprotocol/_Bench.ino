@@ -56,6 +56,7 @@
    chan <i> <value>             Channel_data[i] (0..2047) used by "proto"
    proto <num> [sub] [rxnum] [option] [bind]  run a built-in protocol of the table
    id [value]                   module id of "proto" (MProtocol_id_master) -> @ok id=<hex>
+   cyrfid [hex]                 CYRF6936 MFG ID used by DSM (6 bytes, RAM only), none: the chip's -> @ok cyrfid=<hex>
    user [hex]                   run Bench_user_init(hex)/Bench_user_callback() from _Bench_User.ino
 
  Host tool, build script, examples, interoperability tests and results:
@@ -110,6 +111,23 @@ uint8_t bench_chip = BENCH_NONE;
 uint8_t bench_job = BENCH_IDLE;
 uint8_t bench_rf_ch = 0;
 uint16_function_t bench_callback = 0;
+
+
+#ifdef CYRF6936_INSTALLED
+// CYRF_GetMfgData() (FORCE_CYRF_ID): the "cyrfid" ID, else the chip's
+static uint8_t bench_cid[6];
+static bool bench_cid_set = false;
+uint8_t *bench_cyrf_id()
+{
+	if(!bench_cid_set)
+	{
+		CYRF_WriteRegister(CYRF_25_MFG_ID, 0xFF);	// fuses power on
+		CYRF_ReadRegisterMulti(CYRF_25_MFG_ID, bench_cid, 6);
+		CYRF_WriteRegister(CYRF_25_MFG_ID, 0x00);
+	}
+	return bench_cid;
+}
+#endif
 
 static uint8_t bench_tx_buf[BENCH_PKT_MAX], bench_tx_len;
 static uint32_t bench_tx_period, bench_tx_left, bench_tx_count;
@@ -1213,6 +1231,14 @@ static void bench_exec(char *line)
 			MProtocol_id_master = val;
 		bench_printf("@ok id=%08lx\r\n", MProtocol_id_master);
 	}
+#ifdef CYRF6936_INSTALLED
+	else if(strcmp(cmd, "cyrfid") == 0)
+	{
+		bench_cid_set = bench_hex(&args, bench_cid, sizeof(bench_cid)) == sizeof(bench_cid);
+		uint8_t *id = bench_cyrf_id();
+		bench_printf("@ok cyrfid=%02x%02x%02x%02x%02x%02x\r\n", id[0], id[1], id[2], id[3], id[4], id[5]);
+	}
+#endif
 	else if(strcmp(cmd, "ackpl") == 0)
 	{ // NRF ack payload, none to clear
 		int16_t len = bench_hex(&args, bench_ack_pl, sizeof(bench_ack_pl));
