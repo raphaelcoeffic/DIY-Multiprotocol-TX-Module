@@ -528,6 +528,10 @@ bool bench_receive(uint8_t *buf, uint8_t *len, uint8_t *flags)
 		#ifdef CC2500_INSTALLED
 			case BENCH_CC2500:
 			{
+				// MARCSTATE first: once idle, RXBYTES is final. Read the other way round,
+				// a packet ending between the two reads was taken as complete with the
+				// byte count from before its end.
+				bool idle = (CC2500_ReadReg(CC2500_35_MARCSTATE | CC2500_READ_BURST) & 0x1F) == 0x01;
 				uint8_t n = CC2500_ReadReg(CC2500_3B_RXBYTES | CC2500_READ_BURST);
 				if(n & 0x80)
 				{ // RX FIFO overflow
@@ -538,7 +542,6 @@ bool bench_receive(uint8_t *buf, uint8_t *len, uint8_t *flags)
 				n &= 0x7F;
 				if(n == 0)
 					return false;
-				bool idle = (CC2500_ReadReg(CC2500_35_MARCSTATE | CC2500_READ_BURST) & 0x1F) == 0x01;
 				if(bench_rx_len)
 				{
 					if(n < bench_rx_len)
