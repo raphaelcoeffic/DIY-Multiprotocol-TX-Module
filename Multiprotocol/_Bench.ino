@@ -52,7 +52,7 @@
                                   a7105:  len=payload size (required, the FIFO length register is write only)
                                   xn297:  len=payload size (required)
                                   cyrf:   len ignored, RX_COUNT bytes are read
-   stop                         stop the current job             -> @ok stop tx=<n> rx=<n> err=<n>
+   stop                         stop the current job             -> @ok stop tx=<n> rx=<n> err=<n> [out_drop=<n>]
    chan <i> <value>             Channel_data[i] (0..2047) used by "proto"
    proto <num> [sub] [rxnum] [option] [bind]  run a built-in protocol of the table
    user [hex]                   run Bench_user_init(hex)/Bench_user_callback() from _Bench_User.ino
@@ -64,6 +64,7 @@
 #if defined(MULTI_BENCH)
 
 #include <stdarg.h>
+#include <libmaple/usb_cdcacm.h>
 #include "iface_xn297.h"
 #ifdef A7105_INSTALLED
 	#include "iface_a7105.h"
@@ -123,16 +124,67 @@ static char bench_line[BENCH_LINE_MAX];
 static uint8_t bench_line_len;
 static char bench_out[96];
 
+// Host output goes through a RAM ring drained without blocking. Serial.write()
+// waits for room in the 256 byte USB buffer: when the host is slow to fetch
+// it (23 ms measured), the RX polling stopped with it and the chips missed
+// packets. A line that doesn't fit is dropped whole and counted (out_drop).
+#define BENCH_OUT_SIZE		2048		// power of 2
+static uint8_t bench_out_ring[BENCH_OUT_SIZE];
+static uint16_t bench_out_head, bench_out_tail, bench_out_line;
+static bool bench_out_dropping;
+static uint32_t bench_out_drop;
+
 //*************************
 //***  Output helpers   ***
 //*************************
+static void bench_write(const uint8_t *buf, uint16_t len)
+{
+	bool eol = memchr(buf, '\n', len) != NULL;
+	if(!bench_out_dropping)
+	{
+		if(len < ((bench_out_tail - bench_out_head - 1) & (BENCH_OUT_SIZE - 1)))
+		{
+			for(uint16_t i = 0; i < len; i++)
+			{
+				bench_out_ring[bench_out_head] = buf[i];
+				bench_out_head = (bench_out_head + 1) & (BENCH_OUT_SIZE - 1);
+			}
+			if(eol)
+				bench_out_line = bench_out_head;
+			return;
+		}
+		bench_out_head = bench_out_line;	// No room: drop the line, its start too
+		bench_out_dropping = true;
+		bench_out_drop++;
+	}
+	if(eol)
+		bench_out_dropping = false;
+}
+
+static void bench_puts(const char *str)
+{
+	bench_write((const uint8_t*)str, strlen(str));
+}
+
+static void bench_out_flush()
+{
+	while(bench_out_tail != bench_out_line)
+	{ // Whole lines only: the one being written may still be dropped
+		uint16_t end = bench_out_line > bench_out_tail ? bench_out_line : BENCH_OUT_SIZE;
+		uint32_t n = usb_cdcacm_tx(bench_out_ring + bench_out_tail, end - bench_out_tail);
+		if(n == 0)
+			return;
+		bench_out_tail = (bench_out_tail + n) & (BENCH_OUT_SIZE - 1);
+	}
+}
+
 void bench_printf(const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
 	vsnprintf(bench_out, sizeof(bench_out), fmt, ap);
 	va_end(ap);
-	Serial.write(bench_out);
+	bench_puts(bench_out);
 }
 
 void bench_print_hex(const uint8_t *buf, uint8_t len)
@@ -143,7 +195,7 @@ void bench_print_hex(const uint8_t *buf, uint8_t len)
 	{
 		out[0] = hex[buf[i] >> 4];
 		out[1] = hex[buf[i] & 0x0F];
-		Serial.write((const uint8_t*)out, 2);
+		bench_write((const uint8_t*)out, 2);
 	}
 }
 
@@ -152,10 +204,10 @@ void bench_report_rx(const uint8_t *buf, uint8_t len, uint8_t flags)
 	bench_printf("@rx %lu %u ", micros(), bench_rf_ch);
 	bench_print_hex(buf, len);
 	if(flags & BENCH_RX_CRC)
-		Serial.write((flags & BENCH_RX_CRC_OK) ? " crc=ok" : " crc=bad");
+		bench_puts((flags & BENCH_RX_CRC_OK) ? " crc=ok" : " crc=bad");
 	if(bench_chip == BENCH_NRF)
-		Serial.write((flags & BENCH_RX_RPD) ? " rpd=1" : " rpd=0");
-	Serial.write("\r\n");
+		bench_puts((flags & BENCH_RX_RPD) ? " rpd=1" : " rpd=0");
+	bench_puts("\r\n");
 }
 
 //*************************
@@ -719,6 +771,7 @@ static void bench_stop()
 static void bench_start(uint8_t job, uint16_function_t callback)
 {
 	bench_stat_tx = bench_stat_rx = bench_stat_err = 0;
+	bench_out_drop = 0;
 	bench_job = job;
 	bench_callback = callback;
 }
@@ -749,7 +802,7 @@ static void bench_cmd_info()
 	#ifdef CYRF6936_INSTALLED
 		bench_printf(" cyrf=%d", bench_chip_reset(BENCH_CYRF));
 	#endif
-	Serial.write("\r\n");
+	bench_puts("\r\n");
 	bench_chip = BENCH_NONE;			// All chips have been reset
 }
 
@@ -958,9 +1011,9 @@ static void bench_cmd_read(char *args)
 	if(len == 0 || len > sizeof(data))
 		len = 1;
 	bench_read_regs(reg, data, len);
-	Serial.write("@ok ");
+	bench_puts("@ok ");
 	bench_print_hex(data, len);
-	Serial.write("\r\n");
+	bench_puts("\r\n");
 }
 
 static void bench_cmd_tx(char *args, bool periodic)
@@ -1116,7 +1169,10 @@ static void bench_exec(char *line)
 	else if(strcmp(cmd, "stop") == 0)
 	{
 		bench_stop();
-		bench_printf("@ok stop tx=%lu rx=%lu err=%lu\r\n", bench_stat_tx, bench_stat_rx, bench_stat_err);
+		bench_printf("@ok stop tx=%lu rx=%lu err=%lu", bench_stat_tx, bench_stat_rx, bench_stat_err);
+		if(bench_out_drop)
+			bench_printf(" out_drop=%lu", bench_out_drop);
+		bench_puts("\r\n");
 	}
 	else if(strcmp(cmd, "chan") == 0)
 	{
@@ -1138,6 +1194,7 @@ static void bench_exec(char *line)
 // Execute at most one complete line per call
 static void bench_poll()
 {
+	bench_out_flush();
 	while(Serial.available())
 	{
 		char c = Serial.read();
