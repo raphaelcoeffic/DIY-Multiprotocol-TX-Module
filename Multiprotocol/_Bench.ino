@@ -134,6 +134,50 @@ static uint16_t bench_out_head, bench_out_tail, bench_out_line;
 static bool bench_out_dropping;
 static uint32_t bench_out_drop;
 
+// RF activity LEDs: each packet sent lights LED, each packet received LED2
+// (PA2, also the USART2 TX of the telemetry, unused in bench mode) for
+// BENCH_LED_HOLD ms: a packet stream looks steady, a single packet still shows.
+#define BENCH_LED_HOLD		20			// ms
+static uint32_t bench_led_tx_end, bench_led_rx_end;
+static bool bench_led_tx_on, bench_led_rx_on;
+
+static void bench_led_init()
+{
+	LED_output;
+	LED_off;
+	LED2_output;
+	LED2_off;
+}
+
+static void bench_led_tx()
+{
+	LED_on;
+	bench_led_tx_on = true;
+	bench_led_tx_end = millis() + BENCH_LED_HOLD;
+}
+
+static void bench_led_rx()
+{
+	LED2_on;
+	bench_led_rx_on = true;
+	bench_led_rx_end = millis() + BENCH_LED_HOLD;
+}
+
+static void bench_led_poll()
+{
+	uint32_t now = millis();
+	if(bench_led_tx_on && (int32_t)(now - bench_led_tx_end) >= 0)
+	{
+		LED_off;
+		bench_led_tx_on = false;
+	}
+	if(bench_led_rx_on && (int32_t)(now - bench_led_rx_end) >= 0)
+	{
+		LED2_off;
+		bench_led_rx_on = false;
+	}
+}
+
 //*************************
 //***  Output helpers   ***
 //*************************
@@ -201,6 +245,7 @@ void bench_print_hex(const uint8_t *buf, uint8_t len)
 
 void bench_report_rx(const uint8_t *buf, uint8_t len, uint8_t flags)
 {
+	bench_led_rx();
 	bench_printf("@rx %lu %u ", micros(), bench_rf_ch);
 	bench_print_hex(buf, len);
 	if(flags & BENCH_RX_CRC)
@@ -568,6 +613,7 @@ void bench_send(uint8_t *buf, uint8_t len)
 		#endif
 	}
 	bench_stat_tx++;
+	bench_led_tx();
 }
 
 // Poll the current chip, the chip must be in RX mode.
@@ -1195,6 +1241,7 @@ static void bench_exec(char *line)
 static void bench_poll()
 {
 	bench_out_flush();
+	bench_led_poll();
 	while(Serial.available())
 	{
 		char c = Serial.read();
@@ -1226,6 +1273,7 @@ void Bench_loop()
 	remote_callback = 0;
 	crc16_polynomial = 0x1021;				// Defaults set by protocol_init(), never called here (XN297 emulation CRC)
 	crc8_polynomial  = 0x31;
+	bench_led_init();
 	bench_printf("@ev boot bench=%d\r\n", BENCH_VERSION);
 
 	while(1)
