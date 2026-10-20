@@ -56,7 +56,8 @@
    chan <i> <value>             Channel_data[i] (0..2047) used by "proto"
    proto <num> [sub] [rxnum] [option] [bind]  run a built-in protocol of the table
    id [value]                   module id of "proto" (MProtocol_id_master) -> @ok id=<hex>
-   telem                        the protocol's telemetry link values -> @ok rx_rssi= tx_rssi= rx_lqi= tx_lqi=
+   telem                        the protocol's telemetry link values -> @ok rx_rssi= tx_rssi= rx_lqi= tx_lqi= [pkt=<hex>]
+                                (pkt: packet_in[0..16] received since the last "telem", DSM: RSSI + packet)
    cyrfid [hex]                 CYRF6936 MFG ID used by DSM (6 bytes, RAM only), none: the chip's -> @ok cyrfid=<hex>
    user [hex]                   run Bench_user_init(hex)/Bench_user_callback() from _Bench_User.ino
 
@@ -1242,7 +1243,17 @@ static void bench_exec(char *line)
 #endif
 #ifdef TELEMETRY
 	else if(strcmp(cmd, "telem") == 0)
-		bench_printf("@ok rx_rssi=%u tx_rssi=%u rx_lqi=%u tx_lqi=%u\r\n", RX_RSSI, TX_RSSI, RX_LQI, TX_LQI);
+	{
+		bench_printf("@ok rx_rssi=%u tx_rssi=%u rx_lqi=%u tx_lqi=%u", RX_RSSI, TX_RSSI, RX_LQI, TX_LQI);
+		if(telemetry_link & 1)
+		{ // A packet the protocol received since the last "telem" (DSM: RSSI, then the packet)
+			bench_puts(" pkt=");
+			for(uint8_t i = 0; i < 17; i++)
+				bench_printf("%02x", packet_in[i]);
+			telemetry_link &= ~1;
+		}
+		bench_puts("\r\n");
+	}
 #endif
 	else if(strcmp(cmd, "ackpl") == 0)
 	{ // NRF ack payload, none to clear
