@@ -56,6 +56,7 @@
    chan <i> <value>             Channel_data[i] (0..2047) used by "proto"
    proto <num> [sub] [rxnum] [option] [bind]  run a built-in protocol of the table
    id [value]                   module id of "proto" (MProtocol_id_master) -> @ok id=<hex>
+   telem                        the protocol's telemetry link values -> @ok rx_rssi= tx_rssi= rx_lqi= tx_lqi=
    cyrfid [hex]                 CYRF6936 MFG ID used by DSM (6 bytes, RAM only), none: the chip's -> @ok cyrfid=<hex>
    user [hex]                   run Bench_user_init(hex)/Bench_user_callback() from _Bench_User.ino
 
@@ -1238,6 +1239,10 @@ static void bench_exec(char *line)
 		uint8_t *id = bench_cyrf_id();
 		bench_printf("@ok cyrfid=%02x%02x%02x%02x%02x%02x\r\n", id[0], id[1], id[2], id[3], id[4], id[5]);
 	}
+#endif
+#ifdef TELEMETRY
+	else if(strcmp(cmd, "telem") == 0)
+		bench_printf("@ok rx_rssi=%u tx_rssi=%u rx_lqi=%u tx_lqi=%u\r\n", RX_RSSI, TX_RSSI, RX_LQI, TX_LQI);
 #endif
 	else if(strcmp(cmd, "ackpl") == 0)
 	{ // NRF ack payload, none to clear
