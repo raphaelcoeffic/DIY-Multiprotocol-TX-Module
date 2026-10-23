@@ -348,10 +348,7 @@ static void __attribute__((unused)) XN297_WriteEnhancedPayload(uint8_t* msg, uin
 		for (uint8_t i = offset; i < last; ++i)
 			crc16_update( buf[i], 8);
 		crc16_update( buf[last] & 0xc0, 2);
-		if (xn297_scramble_enabled)
-			crc ^= XN297_crc_xorout(true, 8 * (xn297_addr_len + len) + 10);
-		//else
-		//	crc ^= XN297_crc_xorout(false, 8 * (xn297_addr_len + len) + 10);
+		crc ^= XN297_crc_xorout(xn297_scramble_enabled, 8 * (xn297_addr_len + len) + 10);
 
 		buf[last++] |= (crc >> 8) >> 2;
 		buf[last++] = ((crc >> 8) << 6) | ((crc & 0xff) >> 2);
@@ -471,12 +468,7 @@ static uint8_t __attribute__((unused)) XN297_ReadEnhancedPayload(uint8_t* msg, u
 		crc16_update( buffer[i], 8);
 	crc16_update( buffer[pcf_size+1] & 0xc0, 2);
 	//xorout
-	if (xn297_scramble_enabled)
-		crc ^= XN297_crc_xorout(true, 8 * (xn297_addr_len + pcf_size) + 10);
-#ifdef XN297DUMP_NRF24L01_INO
-	else
-		crc ^= XN297_crc_xorout(false, 8 * (xn297_addr_len + pcf_size) + 10);
-#endif
+	crc ^= XN297_crc_xorout(xn297_scramble_enabled, 8 * (xn297_addr_len + pcf_size) + 10);
 	uint16_t crcxored=(buffer[pcf_size+1]<<10)|(buffer[pcf_size+2]<<2)|(buffer[pcf_size+3]>>6) ;
 	if( crc == crcxored)
 		return pcf_size;					// CRC  OK
