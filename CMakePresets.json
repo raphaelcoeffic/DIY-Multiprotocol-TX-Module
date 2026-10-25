@@ -28,6 +28,12 @@
       "cacheVariables": { "MULTI_BOARD": "stm32f103cb", "MULTI_DEBUG": "ftdi" }
     },
     {
+      "name": "stm32f103cb-bench",
+      "displayName": "STM32F103CB (128KB), bench mode over native USB",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "stm32f103cb", "MULTI_DEBUG": "native", "MULTI_BENCH": "ON" }
+    },
+    {
       "name": "stm32f103c8",
       "displayName": "STM32F103C8 (64KB), CC2500 only",
       "inherits": "base",
@@ -77,6 +83,7 @@
     { "name": "stm32f103cb", "configurePreset": "stm32f103cb" },
     { "name": "stm32f103cb-usb-debug", "configurePreset": "stm32f103cb-usb-debug" },
     { "name": "stm32f103cb-serial-debug", "configurePreset": "stm32f103cb-serial-debug" },
+    { "name": "stm32f103cb-bench", "configurePreset": "stm32f103cb-bench" },
     { "name": "stm32f103c8", "configurePreset": "stm32f103c8" },
     { "name": "t18int", "configurePreset": "t18int" },
     { "name": "mpm-v2", "configurePreset": "mpm-v2" },
