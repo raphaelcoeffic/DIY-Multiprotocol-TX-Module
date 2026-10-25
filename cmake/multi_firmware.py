@@ -4,12 +4,13 @@
 The size is computed and checked as by the Arduino IDE (recipe.size.regex of
 the board package), the signature is appended as by the board package's
 do_version script: 'multi-x<flags>-<version>', which the radios and the
-flashing tools read to identify the firmware. A copy named
-multi-<type>-<version>.bin is made next to the binary.
+flashing tools read to identify the firmware. A copy is made, by default
+multi-<type>-<version>.bin next to the binary (--copy: the file name, with
+{type} and {version}).
 
 Usage: multi_firmware.py --elf FILE --size-tool SIZE --max-size N --max-data N
                          --bin FILE --preproc FILE --header Multiprotocol.h
-                         --board MULTI_STM32_WITH_BOOT=131
+                         --board MULTI_STM32_WITH_BOOT=131 [--copy FILE]
 """
 
 import argparse
@@ -102,6 +103,7 @@ def main():
     ap.add_argument('--preproc', required=True)
     ap.add_argument('--header', required=True)
     ap.add_argument('--board', required=True)
+    ap.add_argument('--copy')
     args = ap.parse_args()
 
     if not size_check(args.elf, args.size_tool, args.max_size, args.max_data):
@@ -116,8 +118,9 @@ def main():
         with open(args.bin, 'ab') as f:
             f.write(sig.encode())
     print('Signature: %s' % sig)
-    copy = os.path.join(os.path.dirname(args.bin),
-                        'multi-%s-%s.bin' % (multi_type, '.'.join(str(v) for v in ver)))
+    copy = args.copy or os.path.join(os.path.dirname(args.bin), 'multi-{type}-{version}.bin')
+    copy = copy.format(type=multi_type, version='.'.join(str(v) for v in ver))
+    os.makedirs(os.path.dirname(os.path.abspath(copy)), exist_ok=True)
     shutil.copyfile(args.bin, copy)
     print('Firmware: %s' % copy)
 

@@ -113,6 +113,44 @@ boards have their own configuration,
 In CLion or Visual Studio Code, open the repository's folder: the presets
 are listed as configurations.
 
+### Options without editing `_Config.h`
+
+`MULTI_OPTIONS` sets options over `_Config.h` (and `_MyConfig.h`), a list
+of:
+
+| Option        | In the firmware                                       |
+|---------------|-------------------------------------------------------|
+| `NAME`        | `#define NAME`                                        |
+| `NAME=VALUE`  | `#define NAME VALUE`                                  |
+| `-NAME`       | `#undef NAME`; `*` matches the names in `_Config.h`: `-*_CC2500_INO`, no CC2500 protocol |
+
+applied in that order. For example, FrSky X and DSM only, in TAER order:
+
+```
+cmake --preset stm32f103cb "-DMULTI_OPTIONS=-*_A7105_INO;-*_CC2500_INO;-*_CYRF6936_INO;-*_NRF24L01_INO;-*_CCNRF_INO;FRSKYX_CC2500_INO;DSM_CYRF6936_INO;-AETR;TAER"
+cmake --build --preset stm32f103cb
+```
+
+In CLion, in the CMake profile's options (`-DMULTI_OPTIONS=...`); `cmake
+--preset stm32f103cb -DMULTI_OPTIONS=` clears them. The options are in a
+header the build generates (`build/<preset>/sketch/multi_options.h`),
+included after `_Config.h`.
+
+### Release files
+
+```
+cmake --build --preset stm32f103cb --target releases
+```
+
+builds the release files of the board, as the GitHub workflow publishes
+them, to `build/<preset>/releases/<group>/<name>-v<version>.bin` (for
+example `releases/stm32f103-128k-4in1/mm-stm-serial-aetr-air-v1.3.4.74.bin`),
+all at once; `--target release-stm32f103-128k-4in1` builds one group. They
+are listed in [cmake/releases.cmake](../cmake/releases.cmake), each with its
+options (`MULTI_OPTIONS`), and use `_Config.h` without your `MULTI_OPTIONS`.
+With GCC 8.3.1 (`ARM_TOOLCHAIN_DIR`, above) they are the same as the
+release files of the Arduino builds (`buildroot/bin`).
+
 ## Flashing
 
 ```

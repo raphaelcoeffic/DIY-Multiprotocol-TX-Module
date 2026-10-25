@@ -450,7 +450,9 @@
 // Full procedure is located here: https://github.com/pascallanger/DIY-Multiprotocol-TX-Module/blob/master/Protocols_Details.md#protocol-selection-in-ppm-mode
 
 //The parameter below indicates the number of desired banks between 1 and 5. Default is 1.
+#ifndef NBR_BANKS
 #define NBR_BANKS 1
+#endif
 
 const PPM_Parameters PPM_prot[14*NBR_BANKS]=	{
 #if NBR_BANKS > 0
