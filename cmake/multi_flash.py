@@ -51,9 +51,31 @@ def serial_ports():
                     '/dev/cu.SLAB_USBtoUART*']
     elif sys.platform.startswith('linux'):
         patterns = ['/dev/ttyUSB*', '/dev/ttyACM*']
+    elif sys.platform == 'win32':
+        return windows_serial_ports()
     else:
         patterns = []
     return sorted(set(p for pattern in patterns for p in glob.glob(pattern)))
+
+
+def windows_serial_ports():
+    """The COM ports of USB devices (not the motherboard's \\Device\\Serial<n>)."""
+    import winreg
+    try:
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'HARDWARE\DEVICEMAP\SERIALCOMM')
+    except OSError:
+        return []
+    ports = []
+    i = 0
+    while True:
+        try:
+            device, port, _ = winreg.EnumValue(key, i)
+        except OSError:
+            break
+        if not device.startswith('\\Device\\Serial'):
+            ports.append(port)
+        i += 1
+    return sorted(ports)
 
 
 def find_port(port, required=True):

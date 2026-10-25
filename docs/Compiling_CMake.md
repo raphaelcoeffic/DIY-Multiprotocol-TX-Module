@@ -11,17 +11,75 @@ see [Compiling and programming the STM32 module](Compiling_STM32.md).
 
 ## What you need
 
-- [CMake](https://cmake.org/download/) 3.21 or newer and [Ninja](https://ninja-build.org/)
-- Python 3
-- The GNU Arm toolchain (`arm-none-eabi-gcc`), in the PATH or in the
-  directory set by `ARM_TOOLCHAIN_DIR` (environment or CMake variable: the
-  toolchain's `bin` directory). The Arduino board package uses
-  [xPack GCC 8.3.1-1.4](https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases/tag/v8.3.1-1.4):
-  use it for the same binaries as the release builds. Newer versions work
-  too (the code is a bit smaller with GCC 14).
+Unlike the Arduino IDE, CMake does not install the compiler and the tools:
+install them once, as below. The STM32 core ([lib/stm32f1](../lib/stm32f1))
+is in the repository.
 
-Everything else (the STM32 core, [lib/stm32f1](../lib/stm32f1)) is in the
-repository.
+| To                | Tools                                                 |
+|-------------------|-------------------------------------------------------|
+| Build             | CMake 3.21 or newer, Ninja, Python 3, the GNU Arm toolchain (`arm-none-eabi-gcc`) |
+| Flash             | [stm32flash](https://sourceforge.net/projects/stm32flash/files/) (serial), [dfu-util](https://dfu-util.sourceforge.net/releases/) (USB) |
+
+CLion comes with CMake and Ninja, Visual Studio Code needs them installed
+(and the CMake Tools extension).
+
+### The compiler
+
+The release builds are made with the compiler of the Arduino board package,
+[xPack GCC 8.3.1-1.4](https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases/tag/v8.3.1-1.4):
+download the archive for your system (`win32-x64.zip`, `darwin-x64.tar.gz`,
+also on Apple silicon Macs, or `linux-x64.tar.gz`), unpack it anywhere, and
+set `ARM_TOOLCHAIN_DIR` (environment variable, or
+`-DARM_TOOLCHAIN_DIR=...` in CMake) to its `bin` directory. With this
+compiler the firmware is the same as the Arduino IDE's.
+
+A newer GNU Arm toolchain in the PATH works too (the firmware is a bit
+smaller with GCC 14), installed as below.
+
+### Windows
+
+```
+winget install Kitware.CMake Ninja-build.Ninja Python.Python.3.13
+winget install Arm.GnuArmEmbeddedToolchain
+```
+
+(or the xPack compiler, above). For flashing, unpack
+`stm32flash-0.7-binaries.zip` and `dfu-util-0.11-binaries.tar.xz` and add
+the directories of `stm32flash.exe` and `dfu-util.exe` to the PATH.
+
+Drivers: the module's USB-serial adapter (CH340 or CP210x) and, for USB
+uploads, the Maple DFU driver: run `BootLoaders\Boards\Windows\install_drivers.bat`,
+see [Install device drivers](Arduino_IDE_Boards.md#install-device-drivers).
+The Windows USB DFU devices always need a driver: the boot loader of the
+modules (STM32duino) does not tell Windows to use its generic one.
+
+The serial port is found when the module is the only USB serial device,
+else set `MULTI_FLASH_PORT` to its COM port. A running firmware is not reset
+to the USB boot loader on Windows: for the `usb` method, the module must
+already be in the boot loader.
+
+### macOS
+
+With [Homebrew](https://brew.sh/):
+
+```
+brew install cmake ninja python stm32flash dfu-util
+brew install --cask gcc-arm-embedded
+```
+
+(or the xPack compiler, above; not the `arm-none-eabi-gcc` formula, which
+has no C library).
+
+### Linux (Debian, Ubuntu)
+
+```
+sudo apt install cmake ninja-build python3 stm32flash dfu-util \
+  gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
+```
+
+(or the xPack compiler, above). Access to the serial and USB devices: see
+[Linux](Arduino_IDE_Boards.md#linux) (udev rules, `dialout` and `plugdev`
+groups).
 
 ## Building
 
@@ -72,6 +130,10 @@ found when there is only one USB serial port, else set it with
 `-DMULTI_FLASH_PORT=/dev/ttyUSB0` or in the `MULTI_FLASH_PORT`
 environment variable. Resetting a running USB firmware to the boot loader
 (the `usb` method) works on Linux and macOS.
+
+The USB uploads use the boot loader the serial upload writes (STM32duino,
+"Maple"): a module flashed once through its serial port can then be
+flashed through USB.
 
 ## How it works
 
