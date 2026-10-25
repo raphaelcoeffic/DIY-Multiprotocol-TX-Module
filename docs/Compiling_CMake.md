@@ -2,8 +2,9 @@
 
 The STM32 firmware can be built without the Arduino IDE, from the command
 line or from an IDE with CMake support (CLion, Visual Studio Code with the
-CMake Tools extension). The firmware is the same as built by the Arduino
-IDE: with the same compiler, the binaries are identical.
+CMake Tools extension). The firmware is built as by the Arduino IDE, with
+the same flags (with the Arduino IDE's compiler, GCC 8.3.1, the binaries are
+identical).
 
 The protocols and options are still selected in
 [Multiprotocol/_Config.h](../Multiprotocol/_Config.h) (or `_MyConfig.h`),
@@ -11,9 +12,8 @@ see [Compiling and programming the STM32 module](Compiling_STM32.md).
 
 ## What you need
 
-The compiler is downloaded by CMake when needed, as the Arduino IDE does
-(below). The STM32 core ([lib/stm32f1](../lib/stm32f1)) is in the
-repository. Install once:
+The compiler is downloaded by CMake (below). The STM32 core
+([lib/stm32f1](../lib/stm32f1)) is in the repository. Install once:
 
 | To                | Tools                                                 |
 |-------------------|-------------------------------------------------------|
@@ -25,18 +25,17 @@ CLion comes with CMake and Ninja, Visual Studio Code needs them installed
 
 ### The compiler
 
-When there is no `arm-none-eabi-gcc` in the PATH (and `ARM_TOOLCHAIN_DIR`
-is not set), CMake downloads the compiler of the Arduino board package,
-[xPack GCC 8.3.1-1.4](https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases/tag/v8.3.1-1.4)
-(120 MB, for Windows, macOS and Linux x86-64; on Apple silicon Macs it runs
-with Rosetta), to `build/toolchains`, once. With it the firmware is the same
-as the Arduino IDE's and the releases'.
+CMake downloads the compiler of the builds,
+[xPack GCC 15.2.1-1.1](https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases/tag/v15.2.1-1.1)
+(300 MB, for Windows x64, macOS and Linux, Intel and ARM), to
+`build/toolchains`, once, and checks it (SHA-256).
 
-- `-DARM_TOOLCHAIN_DOWNLOAD=ON`: use the downloaded compiler even when
-  there is one in the PATH (the same firmware as the releases).
 - `ARM_TOOLCHAIN_DIR` (environment variable or `-DARM_TOOLCHAIN_DIR=...`):
-  the `bin` directory of another GNU Arm toolchain. A newer one works too
-  (the firmware is a bit smaller with GCC 14), installed as below.
+  the `bin` directory of another GNU Arm toolchain, for example the Arduino
+  IDE's (GCC 8.3.1,
+  `~/Library/Arduino15/packages/multi4in1/tools/xpack-arm-none-eabi-gcc/8.3.1-1.4/bin`
+  on macOS) for the same binaries as the Arduino IDE.
+- `-DARM_TOOLCHAIN_DOWNLOAD=OFF`: the `arm-none-eabi-gcc` in the PATH.
 
 The compiler of a build directory can't be changed: delete the directory
 (`build/<preset>`) to use another one.
@@ -47,7 +46,6 @@ The compiler of a build directory can't be changed: delete the directory
 winget install Kitware.CMake Ninja-build.Ninja Python.Python.3.13
 ```
 
-and optionally a newer compiler, `winget install Arm.GnuArmEmbeddedToolchain`.
 For flashing, unpack
 `stm32flash-0.7-binaries.zip` and `dfu-util-0.11-binaries.tar.xz` and add
 the directories of `stm32flash.exe` and `dfu-util.exe` to the PATH.
@@ -71,18 +69,13 @@ With [Homebrew](https://brew.sh/):
 brew install cmake ninja python stm32flash dfu-util
 ```
 
-and optionally a newer compiler, `brew install --cask gcc-arm-embedded`
-(not the `arm-none-eabi-gcc` formula, which has no C library).
-
 ### Linux (Debian, Ubuntu)
 
 ```
 sudo apt install cmake ninja-build python3 stm32flash dfu-util
 ```
 
-and optionally a newer compiler (needed on ARM64 Linux, which has no xPack
-GCC 8.3.1): `sudo apt install gcc-arm-none-eabi libnewlib-arm-none-eabi
-libstdc++-arm-none-eabi-newlib`. Access to the serial and USB devices: see
+Access to the serial and USB devices: see
 [Linux](Arduino_IDE_Boards.md#linux) (udev rules, `dialout` and `plugdev`
 groups).
 

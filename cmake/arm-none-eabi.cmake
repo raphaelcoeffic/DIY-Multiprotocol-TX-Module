@@ -1,16 +1,15 @@
 # GNU Arm Embedded toolchain (arm-none-eabi-gcc)
 #
-# The compiler is the one in ARM_TOOLCHAIN_DIR (cache or environment
-# variable: the toolchain's bin directory), else the one in the PATH. When
-# there is none, or with ARM_TOOLCHAIN_DOWNLOAD, the compiler of the Arduino
-# board package (xPack GCC 8.3.1-1.4, the release builds' compiler) is
-# downloaded once to build/toolchains.
+# The compiler of the builds is xPack GCC 15.2.1-1.1, downloaded once to
+# build/toolchains. ARM_TOOLCHAIN_DIR (cache or environment variable: the
+# toolchain's bin directory) selects another one, and with
+# ARM_TOOLCHAIN_DOWNLOAD=OFF the one in the PATH is used.
 
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR arm)
 
 option(ARM_TOOLCHAIN_DOWNLOAD
-  "Use the compiler of the release builds (xPack GCC 8.3.1-1.4), downloaded" OFF)
+  "Use the compiler of the builds (xPack GCC 15.2.1-1.1), downloaded" ON)
 set(ARM_TOOLCHAIN_CACHE "${CMAKE_CURRENT_LIST_DIR}/../build/toolchains" CACHE PATH
   "Where the compiler is downloaded")
 
@@ -18,21 +17,26 @@ set(ARM_TOOLCHAIN_CACHE "${CMAKE_CURRENT_LIST_DIR}/../build/toolchains" CACHE PA
 list(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES ARM_TOOLCHAIN_DIR)
 
 function(arm_toolchain_download)
-  set(version 8.3.1-1.4)
-  if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+  set(version 15.2.1-1.1)
+  set(p ${CMAKE_HOST_SYSTEM_PROCESSOR})
+  if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows" AND p MATCHES "^(AMD64|x86_64)$")
     set(host win32-x64.zip)
-    set(sha256 2f415819d96a50eb8f75974718e57762d1476a9f9722f4661e43b034fffe1a27)
-  elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
-    # Intel binaries, also for Apple silicon (Rosetta)
+    set(sha256 bae6a3d1667697ce750c3b13d6d26d80973ecedc2cc87bf04869e83447fd93ea)
+  elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin" AND p STREQUAL "arm64")
+    set(host darwin-arm64.tar.gz)
+    set(sha256 574082d35e49a2bcbdc355836b2a3ae5e5bb3b9456c9f5e37177db2ab4aad870)
+  elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin" AND p STREQUAL "x86_64")
     set(host darwin-x64.tar.gz)
-    set(sha256 03ab76e2518748d12b491cb2ca8044633c56291db04933f0c3110637bfa22698)
-  elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux"
-         AND CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+    set(sha256 5be906a5194c3173e145a58048e5607ffff947773237802b93e55e23c415f1b6)
+  elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux" AND p MATCHES "^(x86_64|amd64)$")
     set(host linux-x64.tar.gz)
-    set(sha256 31338c3b8bdb32d9082a857f6d65a57c033e7d6eba1662a30c7fb3e83ff46597)
+    set(sha256 da6a49ad4003944b823c6c93702a8787c922ab34bd7e918ec0eaf6933a9b1ff6)
+  elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux" AND p MATCHES "^(aarch64|arm64)$")
+    set(host linux-arm64.tar.gz)
+    set(sha256 67980c7990eba7bb7ffdf39699102effd70889f5ac427be19a8c8a6c5fab2972)
   else()
-    message(FATAL_ERROR "No xPack GCC ${version} for ${CMAKE_HOST_SYSTEM_NAME} "
-      "${CMAKE_HOST_SYSTEM_PROCESSOR}: install a GNU Arm toolchain (arm-none-eabi-gcc)")
+    message(FATAL_ERROR "No xPack GCC ${version} for ${CMAKE_HOST_SYSTEM_NAME} ${p}: "
+      "install a GNU Arm toolchain (arm-none-eabi-gcc) and set ARM_TOOLCHAIN_DIR")
   endif()
 
   set(name xpack-arm-none-eabi-gcc-${version})
@@ -65,11 +69,8 @@ endif()
 set(ARM_TOOLCHAIN_DIR "${ARM_TOOLCHAIN_DIR}" CACHE PATH
     "bin directory of the arm-none-eabi toolchain (empty: in the PATH)")
 
-if(NOT ARM_TOOLCHAIN_DIR)
-  find_program(_arm_gcc_in_path arm-none-eabi-gcc NO_CACHE)
-  if(ARM_TOOLCHAIN_DOWNLOAD OR NOT _arm_gcc_in_path)
-    arm_toolchain_download()
-  endif()
+if(NOT ARM_TOOLCHAIN_DIR AND ARM_TOOLCHAIN_DOWNLOAD)
+  arm_toolchain_download()
 endif()
 
 if(ARM_TOOLCHAIN_DIR)
