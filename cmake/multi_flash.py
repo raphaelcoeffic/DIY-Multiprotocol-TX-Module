@@ -92,6 +92,27 @@ def run(cmd, dry_run):
         subprocess.run(cmd, check=True)
 
 
+def run_dfu(cmd, dry_run):
+    """dfu-util, its output shown as it comes. dfu-util 0.11 (Homebrew, macOS)
+    exits with 74 after the final USB reset (-R) although the download is
+    done and the firmware starts: the download decides."""
+    print(' '.join(cmd), flush=True)
+    if dry_run:
+        return
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    assert p.stdout
+    out = b''
+    while True:
+        chunk = os.read(p.stdout.fileno(), 256)
+        if not chunk:
+            break
+        out += chunk
+        sys.stdout.buffer.write(chunk)
+        sys.stdout.flush()
+    if p.wait() != 0 and b'Download done.' not in out:
+        raise subprocess.CalledProcessError(p.returncode, cmd)
+
+
 def maple_reset(port, dry_run):
     """upload-reset: DTR/RTS toggles and '1EAF', the running firmware reboots
     to the boot loader."""
@@ -129,7 +150,7 @@ def flash_usb(args, dfu_util):
     port = os.environ.get('MULTI_FLASH_PORT') or args.port or (ports[0] if ports else None)
     if port:
         maple_reset(port, args.dry_run)
-    run([dfu_util, '-d', MAPLE_DFU, '-a', '2', '-D', args.bin, '-R'], args.dry_run)
+    run_dfu([dfu_util, '-d', MAPLE_DFU, '-a', '2', '-D', args.bin, '-R'], args.dry_run)
 
 
 def flash_serial(args, stm32flash, bootloader):
