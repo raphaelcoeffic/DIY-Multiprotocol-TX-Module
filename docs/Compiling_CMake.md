@@ -22,7 +22,7 @@ repository. Install once:
 |-------------------|-------------------------------------------------------|
 | Build             | CMake 3.21 or newer, Ninja, Python 3                  |
 | Flash (STM32)     | [stm32flash](https://sourceforge.net/projects/stm32flash/files/) (serial), [dfu-util](https://dfu-util.sourceforge.net/releases/) (USB) |
-| Flash (MPM v2)    | Python's pyserial or [uv](https://docs.astral.sh/uv/) (USB-C); [OpenOCD](https://openocd.org/) for a debugger (J-Link, LaunchPad's XDS110) |
+| Flash (MPM v2)    | nothing more through its USB-C (Python 3.10 or newer); [OpenOCD](https://openocd.org/) for a debugger (J-Link, LaunchPad's XDS110) |
 
 CLion comes with CMake and Ninja, Visual Studio Code needs them installed
 (and the CMake Tools extension).
@@ -52,7 +52,7 @@ winget install Kitware.CMake Ninja-build.Ninja Python.Python.3.13
 
 For flashing, unpack `stm32flash-0.7-binaries.zip` and
 `dfu-util-0.11-binaries.tar.xz` and add the directories of `stm32flash.exe`
-and `dfu-util.exe` to the PATH. For the MPM v2: `pip install pyserial`.
+and `dfu-util.exe` to the PATH.
 
 Drivers: the module's USB-serial adapter (CH340 or CP210x) and, for USB
 uploads, the Maple DFU driver: run `BootLoaders\Boards\Windows\install_drivers.bat`,
@@ -70,15 +70,13 @@ already be in the boot loader.
 With [Homebrew](https://brew.sh/):
 
 ```
-brew install cmake ninja python stm32flash dfu-util uv
+brew install cmake ninja python stm32flash dfu-util
 ```
-
-(uv runs the MPM v2's flashing scripts, with pyserial.)
 
 ### Linux (Debian, Ubuntu)
 
 ```
-sudo apt install cmake ninja-build python3 stm32flash dfu-util python3-serial
+sudo apt install cmake ninja-build python3 stm32flash dfu-util
 ```
 
 Access to the serial and USB devices: see

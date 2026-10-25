@@ -1,8 +1,4 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.10"
-# dependencies = ["pyserial>=3.5"]
-# ///
+#!/usr/bin/env python3
 """Files of the MPM v2's file system (littlefs on the external flash) over
 USB-C, while the MPM core runs: the protocols keep running (src/file_server.h).
 
@@ -35,8 +31,10 @@ import sys
 import time
 import zlib
 
-import serial
-from serial.tools import list_ports
+# pyserial, vendored: Python alone runs the script (vendor/README.md)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor"))
+import serial  # noqa: E402
+from serial.tools import list_ports  # noqa: E402
 
 import mpm_eeprom
 

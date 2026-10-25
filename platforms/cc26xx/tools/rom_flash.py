@@ -1,8 +1,4 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.10"
-# dependencies = ["pyserial>=3.5"]
-# ///
+#!/usr/bin/env python3
 """First install of the MPM v2 over USB-C: the CC2652's ROM boot loader,
 no debugger. Writes the whole flash (build/mpm-v2-full.bin: boot loader,
 application, CCFG); later updates go through the MPM v2 boot loader instead
@@ -31,8 +27,10 @@ import time
 import zlib
 from pathlib import Path
 
-import serial
-from serial.tools import list_ports
+# pyserial, vendored: Python alone runs the script (vendor/README.md)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor"))
+import serial  # noqa: E402
+from serial.tools import list_ports  # noqa: E402
 
 CH343 = (0x1A86, 0x55D3)
 ACK, NACK = b"\x00\xcc", b"\x00\x33"

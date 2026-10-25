@@ -81,7 +81,6 @@ add_subdirectory(src)
 #             MULTI_FLASH_PORT)
 #   debugger  flash-firmware: MPM v2 with a J-Link, LaunchPad with its
 #             XDS110, XJT-Lite with the patched OpenOCD
-# The usb and radio methods need pyserial (pip install pyserial), or uv.
 if(BOARD STREQUAL "MPM_V2")
   set(_flash_methods usb usb-rom radio debugger)
 else()
@@ -104,19 +103,6 @@ if(_flash_method STREQUAL "debugger")
   add_custom_target(flash)
   add_dependencies(flash flash-firmware)
 else()
-  # Python with pyserial, else uv (the scripts name their dependencies)
-  execute_process(COMMAND ${Python3_EXECUTABLE} -c "import serial"
-    RESULT_VARIABLE _no_pyserial OUTPUT_QUIET ERROR_QUIET)
-  find_program(UV uv)
-  if(NOT _no_pyserial)
-    set(_python ${Python3_EXECUTABLE})
-  elseif(UV)
-    set(_python ${UV} run --script)
-  else()
-    set(_python ${Python3_EXECUTABLE})
-    message(WARNING "No pyserial for ${Python3_EXECUTABLE}: the flash target needs it "
-      "(pip install pyserial)")
-  endif()
   if(MULTI_FLASH_PORT)
     set(_port --port ${MULTI_FLASH_PORT})
   endif()
@@ -128,7 +114,7 @@ else()
     set(_flash_cmd ${CC26XX_DIR}/tools/stk500_flash.py ${CMAKE_BINARY_DIR}/mpm-v2.bin ${_port})
   endif()
   add_custom_target(flash
-    COMMAND ${_python} ${_flash_cmd}
+    COMMAND Python3::Interpreter ${_flash_cmd}
     DEPENDS firmware
     USES_TERMINAL
     VERBATIM)

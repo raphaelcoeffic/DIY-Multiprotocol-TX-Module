@@ -35,11 +35,10 @@ output to Segger RTT.
 | `debugger` | `flash-firmware`: MPM v2 with a J-Link ([tools/flash_jlink.sh](tools/flash_jlink.sh), OpenOCD), LaunchPad with its XDS110, XJT-Lite with the patched OpenOCD (default of these boards) |
 
 The USB-C port is found when one MPM v2 is connected (its CH343), else set
-`MULTI_FLASH_PORT` (or `V2_PORT` in the environment). The `usb` and `radio`
-methods need Python's pyserial (`pip install pyserial`, Debian/Ubuntu:
-`apt install python3-serial`), or [uv](https://docs.astral.sh/uv/), which
-CMake then runs the scripts with. Without CMake:
-`tools/stk500_flash.py build/mpm-v2/mpm-v2.bin`.
+`MULTI_FLASH_PORT` (or `V2_PORT` in the environment). The scripts need
+Python 3.10 or newer and nothing else (pyserial is in
+[tools/vendor](tools/vendor/README.md)). Without CMake:
+`python3 tools/stk500_flash.py build/mpm-v2/mpm-v2.bin`.
 
 ## How the protocol files are built
 
