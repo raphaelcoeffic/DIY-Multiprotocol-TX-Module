@@ -37,7 +37,7 @@ output to Segger RTT.
 The USB-C port is found when one MPM v2 is connected (its CH343), else set
 `MULTI_FLASH_PORT` (or `V2_PORT` in the environment). The scripts need
 Python 3.10 or newer and nothing else (pyserial is in
-[tools/vendor](tools/vendor/README.md)). Without CMake:
+[lib/pyserial](../../lib/pyserial/README.md)). Without CMake:
 `python3 tools/stk500_flash.py build/mpm-v2/mpm-v2.bin`.
 
 ## How the protocol files are built

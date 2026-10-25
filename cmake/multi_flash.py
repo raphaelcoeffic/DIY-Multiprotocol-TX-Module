@@ -12,23 +12,29 @@ from the PATH:
   0x8000000 (the serial debug builds);
 - usb: with the Maple (STM32duino) USB boot loader and dfu-util; a running
   firmware with USB support is first reset to the boot loader through its
-  serial port;
+  serial port (the Maple one, 1eaf:xxxx, or the one given);
 - auto: usb if a Maple USB device (1eaf:xxxx) is connected, else serial.
 
 The serial port is --port, or the MULTI_FLASH_PORT environment variable, or
-the only USB serial port found.
+the only USB serial port found. The serial ports are pyserial's
+(lib/pyserial, vendored): Python alone runs this script.
 
 Usage: multi_flash.py --bin FILE --method METHOD --bootloader FILE
                       --erase-len N [--port PORT] [--dry-run]
 """
 
 import argparse
-import glob
 import os
 import shutil
 import subprocess
 import sys
 import time
+
+# pyserial, vendored (lib/pyserial)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                '..', 'lib', 'pyserial'))
+import serial  # noqa: E402
+from serial.tools import list_ports  # noqa: E402
 
 MAPLE_VID = 0x1eaf
 MAPLE_DFU = '1eaf:0003'
@@ -46,36 +52,8 @@ def tool(name, path):
 
 
 def serial_ports():
-    if sys.platform == 'darwin':
-        patterns = ['/dev/cu.usbserial*', '/dev/cu.wchusbserial*', '/dev/cu.usbmodem*',
-                    '/dev/cu.SLAB_USBtoUART*']
-    elif sys.platform.startswith('linux'):
-        patterns = ['/dev/ttyUSB*', '/dev/ttyACM*']
-    elif sys.platform == 'win32':
-        return windows_serial_ports()
-    else:
-        patterns = []
-    return sorted(set(p for pattern in patterns for p in glob.glob(pattern)))
-
-
-def windows_serial_ports():
-    """The COM ports of USB devices (not the motherboard's \\Device\\Serial<n>)."""
-    import winreg
-    try:
-        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'HARDWARE\DEVICEMAP\SERIALCOMM')
-    except OSError:
-        return []
-    ports = []
-    i = 0
-    while True:
-        try:
-            device, port, _ = winreg.EnumValue(key, i)
-        except OSError:
-            break
-        if not device.startswith('\\Device\\Serial'):
-            ports.append(port)
-        i += 1
-    return sorted(ports)
+    """The USB serial ports (not the motherboard's)."""
+    return sorted(p.device for p in list_ports.comports() if p.vid is not None)
 
 
 def find_port(port, required=True):
@@ -92,18 +70,15 @@ def find_port(port, required=True):
     fail('several serial ports, set MULTI_FLASH_PORT to one of: ' + ', '.join(ports))
 
 
+def maple_ports():
+    """The serial ports of a running firmware with USB (Maple)."""
+    return sorted(p.device for p in list_ports.comports() if p.vid == MAPLE_VID)
+
+
 def maple_connected(dfu_util):
-    """A Maple USB device, in the boot loader (DFU) or running (serial)."""
-    if sys.platform.startswith('linux'):
-        for path in glob.glob('/sys/bus/usb/devices/*/idVendor'):
-            with open(path) as f:
-                if int(f.read().strip(), 16) == MAPLE_VID:
-                    return True
-        return False
-    if sys.platform == 'darwin':
-        out = subprocess.run(['ioreg', '-p', 'IOUSB', '-l', '-w0'], stdout=subprocess.PIPE,
-                             universal_newlines=True).stdout
-        return '"idVendor" = %d' % MAPLE_VID in out
+    """A Maple USB device: running (serial) or in the boot loader (DFU)."""
+    if maple_ports():
+        return True
     if dfu_util:
         out = subprocess.run([dfu_util, '-l'], stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, universal_newlines=True).stdout
@@ -123,21 +98,17 @@ def maple_reset(port, dry_run):
     print('reset %s to the boot loader' % port, flush=True)
     if dry_run:
         return
-    import fcntl
-    import termios
-    fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+    s = serial.Serial()
+    s.port = port
+    s.rts = s.dtr = False  # from the start, not raised by open()
     try:
-        attr = termios.tcgetattr(fd)
-        old = list(attr)
-        attr[2] |= termios.CRTSCTS | termios.CLOCAL
-        attr[1] = 0
-        termios.tcsetattr(fd, termios.TCSANOW, attr)
-
+        s.open()
+    except serial.SerialException as e:
+        fail('cannot open %s: %s' % (port, e))
+    with s:
         def lines(rts, dtr):
-            status = int.from_bytes(fcntl.ioctl(fd, termios.TIOCMGET, b'\0\0\0\0'), sys.byteorder)
-            status = (status | termios.TIOCM_RTS) if rts else (status & ~termios.TIOCM_RTS)
-            status = (status | termios.TIOCM_DTR) if dtr else (status & ~termios.TIOCM_DTR)
-            fcntl.ioctl(fd, termios.TIOCMSET, status.to_bytes(4, sys.byteorder))
+            s.rts = rts
+            s.dtr = dtr
 
         lines(False, False)
         lines(False, True)
@@ -148,16 +119,15 @@ def maple_reset(port, dry_run):
         time.sleep(0.05)
         lines(True, False)
         time.sleep(0.05)
-        os.write(fd, b'1EAF')
-        termios.tcsetattr(fd, termios.TCSANOW, old)
-    finally:
-        os.close(fd)
+        s.write(b'1EAF')
     time.sleep(0.75 + 0.5)
 
 
 def flash_usb(args, dfu_util):
-    port = find_port(args.port, required=False)
-    if port and os.path.exists(port):
+    # A running firmware first goes to the boot loader
+    ports = maple_ports()
+    port = os.environ.get('MULTI_FLASH_PORT') or args.port or (ports[0] if ports else None)
+    if port:
         maple_reset(port, args.dry_run)
     run([dfu_util, '-d', MAPLE_DFU, '-a', '2', '-D', args.bin, '-R'], args.dry_run)
 

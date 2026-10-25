@@ -61,9 +61,7 @@ The Windows USB DFU devices always need a driver: the boot loader of the
 modules (STM32duino) does not tell Windows to use its generic one.
 
 The serial port is found when the module is the only USB serial device,
-else set `MULTI_FLASH_PORT` to its COM port. A running firmware is not reset
-to the USB boot loader on Windows: for the `usb` method, the module must
-already be in the boot loader.
+else set `MULTI_FLASH_PORT` to its COM port.
 
 ### macOS
 
@@ -135,9 +133,11 @@ builds the firmware and flashes it as the Arduino IDE uploads it, with
 
 The method is set with `-DMULTI_FLASH_METHOD=...`. The serial port is
 found when there is only one USB serial port, else set it with
-`-DMULTI_FLASH_PORT=/dev/ttyUSB0` or in the `MULTI_FLASH_PORT`
-environment variable. Resetting a running USB firmware to the boot loader
-(the `usb` method) works on Linux and macOS.
+`-DMULTI_FLASH_PORT=/dev/ttyUSB0` (`COM3` on Windows) or in the
+`MULTI_FLASH_PORT` environment variable. For the `usb` method, a running
+firmware with USB is first reset to the boot loader through its USB serial
+port. The serial ports are Python's pyserial, in the repository
+([lib/pyserial](../lib/pyserial/README.md)): nothing to install.
 
 The USB uploads use the boot loader the serial upload writes (STM32duino,
 "Maple"): a module flashed once through its serial port can then be

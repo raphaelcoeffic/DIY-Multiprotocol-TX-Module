@@ -31,8 +31,9 @@ import os
 import sys
 import time
 
-# pyserial, vendored: Python alone runs the script (vendor/README.md)
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor"))
+# pyserial, vendored: Python alone runs the script (lib/pyserial)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "..", "..", "lib", "pyserial"))
 import serial  # noqa: E402
 from serial.tools import list_ports  # noqa: E402
 
