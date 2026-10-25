@@ -92,6 +92,7 @@ cmake --build --preset stm32f103cb
 | `stm32f103cb`              | STM32F103CB (128KB): 4-in-1, 5-in-1, T-Lite  |
 | `stm32f103cb-usb-debug`    | STM32F103CB, native USB debugging            |
 | `stm32f103cb-serial-debug` | STM32F103CB, serial/FTDI debugging (no boot loader) |
+| `stm32f103cb-bench`        | STM32F103CB, bench mode over native USB (`MULTI_BENCH`, see `_Bench.ino`): the RF chips driven from a host, no reflashing between tries |
 | `stm32f103c8`              | STM32F103C8 (64KB), CC2500 only              |
 | `t18int`                   | T18 internal 5-in-1                          |
 | `mpm-v2`                   | MPM v2 (CC2652RB), see [MPM v2](MPM_v2.md)   |
@@ -169,7 +170,7 @@ builds the firmware and flashes it as the Arduino IDE uploads it, with
 |-----------------|------------------------------------------------------------------|
 | `auto`          | `usb` if a Maple USB device is connected, else `serial` (default)|
 | `serial`        | Through the module's USB-serial port: erases the flash, writes the boot loader and the firmware |
-| `usb`           | Maple USB boot loader (dfu-util), default of `stm32f103cb-usb-debug` |
+| `usb`           | Maple USB boot loader (dfu-util), default of `stm32f103cb-usb-debug` and `stm32f103cb-bench` |
 | `serial-noboot` | Serial, without boot loader, default of `stm32f103cb-serial-debug` |
 
 The method is set with `-DMULTI_FLASH_METHOD=...`. The serial port is
