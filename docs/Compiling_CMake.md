@@ -143,6 +143,20 @@ The USB uploads use the boot loader the serial upload writes (STM32duino,
 "Maple"): a module flashed once through its serial port can then be
 flashed through USB.
 
+Plugged into a computer, such a module stays in its boot loader
+("Maple 003") at power up, even with an external supply: the boot loader
+sees the USB host and waits to be flashed. To run the firmware over USB
+(USB power is enough, RF included):
+
+```
+cmake --build --preset stm32f103cb --target start
+```
+
+starts it without writing anything (`multi_flash.py --method start`, with
+the libusb that dfu-util uses). A firmware with USB support then shows up
+as a serial port ("Maple"); after that, unplugging and replugging USB with
+an external supply connected keeps it running.
+
 For the MPM v2, `flash` writes the firmware through its USB-C port, as the
 radio does; the other methods (first install, through the radio, with a
 debugger) are in [platforms/cc26xx](../platforms/cc26xx/README.md#flashing).

@@ -13,7 +13,14 @@ from the PATH:
 - usb: with the Maple (STM32duino) USB boot loader and dfu-util; a running
   firmware with USB support is first reset to the boot loader through its
   serial port (the Maple one, 1eaf:xxxx, or the one given);
-- auto: usb if a Maple USB device (1eaf:xxxx) is connected, else serial.
+- auto: usb if a Maple USB device (1eaf:xxxx) is connected, else serial;
+- start: nothing written, a module waiting in its USB boot loader starts its
+  firmware. The boot loader stays there at power up when it sees a USB host
+  (D-, PA11, low): plugged into a computer, a module only flashes. Its DFU
+  code (STM32duino-bootloader dfu.c) sets the "just uploaded" boot flag at
+  the first DFU_DNLOAD with data and copies that data to flash only at the
+  next DFU_GETSTATUS; a USB reset in between resets the chip, which then
+  starts the firmware at once. Needs libusb-1.0 (dfu-util's).
 
 The serial port is --port, or the MULTI_FLASH_PORT environment variable, or
 the only USB serial port found. The serial ports are pyserial's
@@ -21,14 +28,18 @@ the only USB serial port found. The serial ports are pyserial's
 
 Usage: multi_flash.py --bin FILE --method METHOD --bootloader FILE
                       --erase-len N [--port PORT] [--dry-run]
+       multi_flash.py --method start
 """
 
 import argparse
+import ctypes
+import ctypes.util
 import os
 import shutil
 import subprocess
 import sys
 import time
+from typing import NoReturn
 
 # pyserial, vendored (lib/pyserial)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -38,9 +49,11 @@ from serial.tools import list_ports  # noqa: E402
 
 MAPLE_VID = 0x1eaf
 MAPLE_DFU = '1eaf:0003'
+MAPLE_DFU_PID = 0x0003
+DFU_DNLOAD = 1
 
 
-def fail(msg):
+def fail(msg) -> NoReturn:
     sys.exit('multi_flash: ' + msg)
 
 
@@ -153,6 +166,76 @@ def flash_usb(args, dfu_util):
     run_dfu([dfu_util, '-d', MAPLE_DFU, '-a', '2', '-D', args.bin, '-R'], args.dry_run)
 
 
+def libusb(dfu_util):
+    """libusb-1.0: the system's, Homebrew's, or the one next to dfu-util
+    (Windows builds of dfu-util come with libusb-1.0.dll)."""
+    names = [ctypes.util.find_library('usb-1.0'), 'libusb-1.0.so.0',
+             '/opt/homebrew/lib/libusb-1.0.dylib', '/usr/local/lib/libusb-1.0.dylib']
+    if dfu_util:
+        names.append(os.path.join(os.path.dirname(dfu_util), 'libusb-1.0.dll'))
+    lib = None
+    for name in filter(None, names):
+        try:
+            lib = ctypes.CDLL(name)
+            break
+        except OSError:
+            pass
+    if lib is None:
+        fail('libusb-1.0 not found: install it (Homebrew, apt: libusb-1.0-0), dfu-util uses it too')
+    vp, i = ctypes.c_void_p, ctypes.c_int
+    lib.libusb_init.argtypes = [ctypes.POINTER(vp)]
+    lib.libusb_exit.argtypes = [vp]
+    lib.libusb_open_device_with_vid_pid.argtypes = [vp, ctypes.c_uint16, ctypes.c_uint16]
+    lib.libusb_open_device_with_vid_pid.restype = vp
+    lib.libusb_claim_interface.argtypes = [vp, i]
+    lib.libusb_set_interface_alt_setting.argtypes = [vp, i, i]
+    lib.libusb_control_transfer.argtypes = [vp, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint16,
+                                            ctypes.c_uint16, ctypes.c_char_p, ctypes.c_uint16,
+                                            ctypes.c_uint]
+    lib.libusb_reset_device.argtypes = [vp]
+    lib.libusb_close.argtypes = [vp]
+    lib.libusb_error_name.argtypes = [i]
+    lib.libusb_error_name.restype = ctypes.c_char_p
+    return lib
+
+
+def maple_start(dfu_util, dry_run):
+    """The firmware of a module in its USB boot loader starts, nothing
+    written: DFU_DNLOAD of one byte on alt 2 (the boot flag is set, the byte
+    stays in RAM), then a USB reset (the chip resets). The reset goes out
+    even if the boot loader refuses the DNLOAD (not idle)."""
+    print('start the firmware of the module in its boot loader (%s)' % MAPLE_DFU, flush=True)
+    if dry_run:
+        return
+    lib = libusb(dfu_util)
+    ctx = ctypes.c_void_p()
+    if lib.libusb_init(ctypes.byref(ctx)) < 0:
+        fail('libusb_init failed')
+    try:
+        h = lib.libusb_open_device_with_vid_pid(ctx, MAPLE_VID, MAPLE_DFU_PID)
+        if not h:
+            fail('no module in its USB boot loader (%s): connect it, or it runs already' % MAPLE_DFU)
+        r = lib.libusb_claim_interface(h, 0)
+        if r >= 0:
+            r = lib.libusb_set_interface_alt_setting(h, 0, 2)
+        if r >= 0:
+            lib.libusb_control_transfer(h, 0x21, DFU_DNLOAD, 0, 0, b'\xff', 1, 1000)
+        if r < 0:
+            lib.libusb_close(h)
+            fail('cannot open the boot loader: %s' % lib.libusb_error_name(r).decode())
+        lib.libusb_reset_device(h)  # the device goes away: an error is expected
+        lib.libusb_close(h)
+        # A boot loader that stayed comes back within a second
+        time.sleep(2.5)
+        h = lib.libusb_open_device_with_vid_pid(ctx, MAPLE_VID, MAPLE_DFU_PID)
+        if h:
+            lib.libusb_close(h)
+            fail('the module is still in its boot loader')
+        print('firmware started', flush=True)
+    finally:
+        lib.libusb_exit(ctx)
+
+
 def flash_serial(args, stm32flash, bootloader):
     port = find_port(args.port)
     run([stm32flash, '-o', '-S', '0x8000000:%d' % args.erase_len, '-b', '115200', port],
@@ -169,10 +252,11 @@ def flash_serial(args, stm32flash, bootloader):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--bin', required=True)
-    ap.add_argument('--method', required=True, choices=['auto', 'usb', 'serial', 'serial-noboot'])
-    ap.add_argument('--bootloader', required=True)
-    ap.add_argument('--erase-len', type=int, required=True)
+    ap.add_argument('--bin')
+    ap.add_argument('--method', required=True,
+                    choices=['auto', 'usb', 'serial', 'serial-noboot', 'start'])
+    ap.add_argument('--bootloader')
+    ap.add_argument('--erase-len', type=int)
     ap.add_argument('--port', default='')
     ap.add_argument('--stm32flash', default='')
     ap.add_argument('--dfu-util', default='')
@@ -180,6 +264,11 @@ def main():
     args = ap.parse_args()
 
     method = args.method
+    if method == 'start':
+        maple_start(args.dfu_util or shutil.which('dfu-util'), args.dry_run)
+        return
+    if not (args.bin and args.bootloader and args.erase_len):
+        ap.error('--bin, --bootloader and --erase-len are needed to flash')
     if method == 'auto':
         method = 'usb' if maple_connected(args.dfu_util or shutil.which('dfu-util')) else 'serial'
         print('%s upload' % ('Maple device found: USB' if method == 'usb' else

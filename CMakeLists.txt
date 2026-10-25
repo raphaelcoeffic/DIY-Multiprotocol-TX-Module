@@ -95,3 +95,12 @@ add_custom_target(flash
   DEPENDS Multiprotocol
   USES_TERMINAL
   VERBATIM)
+
+# cmake --build --preset <preset> --target start: a module plugged into the
+# computer waits in its USB boot loader, its firmware starts (nothing written)
+add_custom_target(start
+  COMMAND Python3::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/cmake/multi_flash.py
+    --method start
+    --dfu-util "$<$<BOOL:${DFU_UTIL}>:${DFU_UTIL}>"
+  USES_TERMINAL
+  VERBATIM)
