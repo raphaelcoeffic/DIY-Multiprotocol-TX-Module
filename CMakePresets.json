@@ -1,0 +1,50 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake"
+    },
+    {
+      "name": "stm32f103cb",
+      "displayName": "STM32F103CB (128KB)",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "stm32f103cb", "MULTI_DEBUG": "none" }
+    },
+    {
+      "name": "stm32f103cb-usb-debug",
+      "displayName": "STM32F103CB (128KB), native USB debugging",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "stm32f103cb", "MULTI_DEBUG": "native" }
+    },
+    {
+      "name": "stm32f103cb-serial-debug",
+      "displayName": "STM32F103CB (128KB), serial/FTDI debugging",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "stm32f103cb", "MULTI_DEBUG": "ftdi" }
+    },
+    {
+      "name": "stm32f103c8",
+      "displayName": "STM32F103C8 (64KB)",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "stm32f103c8", "MULTI_DEBUG": "none" }
+    },
+    {
+      "name": "t18int",
+      "displayName": "T18 internal 5-in-1 (128KB)",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "t18int" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "stm32f103cb", "configurePreset": "stm32f103cb" },
+    { "name": "stm32f103cb-usb-debug", "configurePreset": "stm32f103cb-usb-debug" },
+    { "name": "stm32f103cb-serial-debug", "configurePreset": "stm32f103cb-serial-debug" },
+    { "name": "stm32f103c8", "configurePreset": "stm32f103c8" },
+    { "name": "t18int", "configurePreset": "t18int" }
+  ]
+}
