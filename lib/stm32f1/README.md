@@ -16,7 +16,9 @@ and [libmaple](https://github.com/leaflabs/libmaple).
 | `system/libmaple`              | `system/libmaple` (headers)                     |
 | `variants/generic_stm32f103c`  | `variants/generic_stm32f103c` (linker scripts)  |
 | `libraries/SPI`, `libraries/EEPROM` | `libraries/SPI/src`, `libraries/EEPROM`     |
+| `bootloaders/StmMulti4in1.bin` | `bootloaders/Multi4in1` (written by the serial upload) |
 
-Left out: the upload tools, boot loaders, drivers, library examples and
+Left out: the upload tools (cmake/multi_flash.py does the same with
+stm32flash and dfu-util), drivers, library examples and
 makefiles. The licenses are in the files: MIT (libmaple), LGPL 2.1 (the
 Arduino API).

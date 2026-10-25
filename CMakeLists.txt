@@ -58,3 +58,28 @@ add_custom_command(TARGET Multiprotocol POST_BUILD
     --header ${MULTI_SKETCH_DIR}/Multiprotocol.h
     --board ${MULTI_BOARD_NAME}
   VERBATIM)
+
+# cmake --build --preset <preset> --target flash
+set(MULTI_FLASH_METHOD "" CACHE STRING
+  "Upload method: auto, usb, serial (with the boot loader), serial-noboot (empty: the board's)")
+set_property(CACHE MULTI_FLASH_METHOD PROPERTY STRINGS "" auto usb serial serial-noboot)
+set(MULTI_FLASH_PORT "" CACHE STRING
+  "Serial port of the module (empty: the only USB serial port; or MULTI_FLASH_PORT in the environment)")
+find_program(STM32FLASH stm32flash)
+find_program(DFU_UTIL dfu-util)
+if(MULTI_FLASH_METHOD)
+  set(_flash_method ${MULTI_FLASH_METHOD})
+else()
+  set(_flash_method ${MULTI_FLASH_DEFAULT})
+endif()
+add_custom_target(flash
+  COMMAND Python3::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/cmake/multi_flash.py
+    --bin $<TARGET_FILE_DIR:Multiprotocol>/Multiprotocol.bin
+    --method ${_flash_method}
+    --bootloader ${MULTI_BOOTLOADER} --erase-len ${MULTI_ERASE_LEN}
+    --port "${MULTI_FLASH_PORT}"
+    --stm32flash "$<$<BOOL:${STM32FLASH}>:${STM32FLASH}>"
+    --dfu-util "$<$<BOOL:${DFU_UTIL}>:${DFU_UTIL}>"
+  DEPENDS Multiprotocol
+  USES_TERMINAL
+  VERBATIM)

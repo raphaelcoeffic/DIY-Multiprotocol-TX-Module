@@ -49,6 +49,30 @@ Arduino IDE, select the protocols you need in `_Config.h`.
 In CLion or Visual Studio Code, open the repository's folder: the presets
 are listed as configurations.
 
+## Flashing
+
+```
+cmake --build --preset stm32f103cb --target flash
+```
+
+builds the firmware and flashes it as the Arduino IDE uploads it, with
+[stm32flash](https://sourceforge.net/projects/stm32flash/) and
+[dfu-util](https://dfu-util.sourceforge.net/) (Homebrew, apt:
+`stm32flash`, `dfu-util`):
+
+| Method          | How                                                              |
+|-----------------|------------------------------------------------------------------|
+| `auto`          | `usb` if a Maple USB device is connected, else `serial` (default)|
+| `serial`        | Through the module's USB-serial port: erases the flash, writes the boot loader and the firmware |
+| `usb`           | Maple USB boot loader (dfu-util), default of `stm32f103cb-usb-debug` |
+| `serial-noboot` | Serial, without boot loader, default of `stm32f103cb-serial-debug` |
+
+The method is set with `-DMULTI_FLASH_METHOD=...`. The serial port is
+found when there is only one USB serial port, else set it with
+`-DMULTI_FLASH_PORT=/dev/ttyUSB0` or in the `MULTI_FLASH_PORT`
+environment variable. Resetting a running USB firmware to the boot loader
+(the `usb` method) works on Linux and macOS.
+
 ## How it works
 
 The Arduino IDE builds the `.ino` files as one C++ file, with prototypes for
