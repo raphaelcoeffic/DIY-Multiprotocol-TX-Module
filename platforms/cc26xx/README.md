@@ -8,9 +8,9 @@ protocol files are the same as on the STM32 modules, built unchanged:
 
 | Board (`MULTI_BOARD`, preset) | Hardware                                      | Flashing          |
 |-------------------------------|-----------------------------------------------|-------------------|
-| `mpm-v2`, `mpm-v2-debug`      | MPM v2 module (CC2652RB)                      | J-Link on J10     |
+| `mpm-v2`, `mpm-v2-debug`      | MPM v2 module (CC2652RB)                      | its USB-C, the radio, or a J-Link on J10 |
 | `launchpad`                   | CC2652R1 LaunchPad (LAUNCHXL-CC26X2R1)        | XDS110 (OpenOCD)  |
-| `xjt-lite`                    | FrSky XJT-Lite (CC2650F128), reduced MPM      | patched OpenOCD, cJTAG |
+| `xjt-lite`                    | FrSky XJT-Lite (CC2650F128), reduced MPM      | patched OpenOCD, cJTAG, J-Link |
 
 ```
 cmake --preset mpm-v2
@@ -22,6 +22,24 @@ In `build/mpm-v2`: `mpm-v2.bin` for the radio (flashed from EdgeTX),
 `mpm-v2-full.bin` / `.hex` for a first install (boot loader and
 application), `firmware.elf` for debuggers. `mpm-v2-debug` sends debug
 output to Segger RTT.
+
+## Flashing
+
+`--target flash`, with `-DMULTI_FLASH_METHOD=...`:
+
+| Method     | How                                                                  |
+|------------|----------------------------------------------------------------------|
+| `usb`      | MPM v2 (default): its USB-C port, through the MPM v2 boot loader, as the radio flashes `mpm-v2.bin` ([tools/stk500_flash.py](tools/stk500_flash.py)) |
+| `usb-rom`  | MPM v2: its USB-C port, through the chip's ROM boot loader: boot loader and firmware (`mpm-v2-full.bin`, [tools/rom_flash.py](tools/rom_flash.py)), for the first install or a module that no longer starts |
+| `radio`    | MPM v2 in the radio's bay, through the radio's USB: EdgeTX with the external module pass-through, `MULTI_FLASH_PORT` = the radio's USB serial port |
+| `debugger` | `flash-firmware`: MPM v2 with a J-Link ([tools/flash_jlink.sh](tools/flash_jlink.sh), OpenOCD), LaunchPad with its XDS110, XJT-Lite with the patched OpenOCD (default of these boards) |
+
+The USB-C port is found when one MPM v2 is connected (its CH343), else set
+`MULTI_FLASH_PORT` (or `V2_PORT` in the environment). The `usb` and `radio`
+methods need Python's pyserial (`pip install pyserial`, Debian/Ubuntu:
+`apt install python3-serial`), or [uv](https://docs.astral.sh/uv/), which
+CMake then runs the scripts with. Without CMake:
+`tools/stk500_flash.py build/mpm-v2/mpm-v2.bin`.
 
 ## How the protocol files are built
 
@@ -53,7 +71,7 @@ output to Segger RTT.
 | `lib/ti/devices/`  | TI driverlib (CC13x2/CC26x2, CC26x0), BSD-3-Clause            |
 | `lib/SeggerRTT/`   | Segger RTT (debug output)                                     |
 | `lib/littlefs/`    | littlefs 2.10 (`lfs.c`, `lfs_util.c`), BSD-3-Clause          |
-| `tools/`           | `fw_image.py` (the file for the radio), `flash_jlink.sh`, EEPROM and file system tools |
+| `tools/`           | `fw_image.py` (the file for the radio), flashing (`stk500_flash.py`, `rom_flash.py`, `flash_jlink.sh`), EEPROM and file system tools |
 | `tests/`           | host tests (`make -C tests/frame`, `tests/mpm`, `tests/storage`) |
 
 This is a copy of the [mpmv2](https://github.com/raphaelcoeffic/mpmv2)

@@ -70,8 +70,66 @@ target_link_libraries(toolchain_gcc_m3 INTERFACE toolchain_gcc)
 add_subdirectory(lib)
 add_subdirectory(src)
 
-# cmake --build --preset <preset> --target flash: the MPM, as flash-firmware
-# (MPM v2: boot loader and application, J-Link; LaunchPad: XDS110; XJT-Lite:
-# the application at 0x8000)
-add_custom_target(flash)
-add_dependencies(flash flash-firmware)
+# cmake --build --preset <preset> --target flash: the MPM firmware.
+#   usb       MPM v2: through its USB-C port and the MPM v2 boot loader, as
+#             the radio flashes it (tools/stk500_flash.py, mpm-v2.bin)
+#   usb-rom   MPM v2: through its USB-C port and the chip's ROM boot loader,
+#             boot loader and firmware (tools/rom_flash.py, mpm-v2-full.bin):
+#             the first install, or a module that no longer starts
+#   radio     MPM v2 in the radio's bay, through the radio's USB (EdgeTX
+#             with the external module pass-through, its CLI on
+#             MULTI_FLASH_PORT)
+#   debugger  flash-firmware: MPM v2 with a J-Link, LaunchPad with its
+#             XDS110, XJT-Lite with the patched OpenOCD
+# The usb and radio methods need pyserial (pip install pyserial), or uv.
+if(BOARD STREQUAL "MPM_V2")
+  set(_flash_methods usb usb-rom radio debugger)
+else()
+  set(_flash_methods debugger)
+endif()
+set(MULTI_FLASH_METHOD "" CACHE STRING
+  "Flash method: usb, usb-rom, radio, debugger (empty: the board's first)")
+set(MULTI_FLASH_PORT "" CACHE STRING
+  "Serial port: the MPM v2's USB-C (empty: the first CH343, or V2_PORT in the environment), the radio's for radio")
+if(MULTI_FLASH_METHOD)
+  set(_flash_method ${MULTI_FLASH_METHOD})
+else()
+  list(GET _flash_methods 0 _flash_method)
+endif()
+if(NOT _flash_method IN_LIST _flash_methods)
+  message(FATAL_ERROR "MULTI_FLASH_METHOD=${_flash_method}: one of ${_flash_methods} for ${MULTI_BOARD}")
+endif()
+
+if(_flash_method STREQUAL "debugger")
+  add_custom_target(flash)
+  add_dependencies(flash flash-firmware)
+else()
+  # Python with pyserial, else uv (the scripts name their dependencies)
+  execute_process(COMMAND ${Python3_EXECUTABLE} -c "import serial"
+    RESULT_VARIABLE _no_pyserial OUTPUT_QUIET ERROR_QUIET)
+  find_program(UV uv)
+  if(NOT _no_pyserial)
+    set(_python ${Python3_EXECUTABLE})
+  elseif(UV)
+    set(_python ${UV} run --script)
+  else()
+    set(_python ${Python3_EXECUTABLE})
+    message(WARNING "No pyserial for ${Python3_EXECUTABLE}: the flash target needs it "
+      "(pip install pyserial)")
+  endif()
+  if(MULTI_FLASH_PORT)
+    set(_port --port ${MULTI_FLASH_PORT})
+  endif()
+  if(_flash_method STREQUAL "usb-rom")
+    set(_flash_cmd ${CC26XX_DIR}/tools/rom_flash.py ${CMAKE_BINARY_DIR}/mpm-v2-full.bin ${_port})
+  elseif(_flash_method STREQUAL "radio")
+    set(_flash_cmd ${CC26XX_DIR}/tools/stk500_flash.py ${CMAKE_BINARY_DIR}/mpm-v2.bin ${_port} --radio)
+  else()
+    set(_flash_cmd ${CC26XX_DIR}/tools/stk500_flash.py ${CMAKE_BINARY_DIR}/mpm-v2.bin ${_port})
+  endif()
+  add_custom_target(flash
+    COMMAND ${_python} ${_flash_cmd}
+    DEPENDS firmware
+    USES_TERMINAL
+    VERBATIM)
+endif()

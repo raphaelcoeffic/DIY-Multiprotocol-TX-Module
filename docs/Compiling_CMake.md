@@ -22,7 +22,7 @@ repository. Install once:
 |-------------------|-------------------------------------------------------|
 | Build             | CMake 3.21 or newer, Ninja, Python 3                  |
 | Flash (STM32)     | [stm32flash](https://sourceforge.net/projects/stm32flash/files/) (serial), [dfu-util](https://dfu-util.sourceforge.net/releases/) (USB) |
-| Flash (CC26xx)    | [OpenOCD](https://openocd.org/) and a J-Link or the LaunchPad's XDS110 |
+| Flash (MPM v2)    | Python's pyserial or [uv](https://docs.astral.sh/uv/) (USB-C); [OpenOCD](https://openocd.org/) for a debugger (J-Link, LaunchPad's XDS110) |
 
 CLion comes with CMake and Ninja, Visual Studio Code needs them installed
 (and the CMake Tools extension).
@@ -52,9 +52,7 @@ winget install Kitware.CMake Ninja-build.Ninja Python.Python.3.13
 
 For flashing, unpack `stm32flash-0.7-binaries.zip` and
 `dfu-util-0.11-binaries.tar.xz` and add the directories of `stm32flash.exe`
-and `dfu-util.exe` to the PATH; for the CC26xx boards,
-[xPack OpenOCD](https://github.com/xpack-dev-tools/openocd-xpack/releases)
-(its `bin` directory in the PATH).
+and `dfu-util.exe` to the PATH. For the MPM v2: `pip install pyserial`.
 
 Drivers: the module's USB-serial adapter (CH340 or CP210x) and, for USB
 uploads, the Maple DFU driver: run `BootLoaders\Boards\Windows\install_drivers.bat`,
@@ -72,13 +70,15 @@ already be in the boot loader.
 With [Homebrew](https://brew.sh/):
 
 ```
-brew install cmake ninja python stm32flash dfu-util open-ocd
+brew install cmake ninja python stm32flash dfu-util uv
 ```
+
+(uv runs the MPM v2's flashing scripts, with pyserial.)
 
 ### Linux (Debian, Ubuntu)
 
 ```
-sudo apt install cmake ninja-build python3 stm32flash dfu-util openocd
+sudo apt install cmake ninja-build python3 stm32flash dfu-util python3-serial
 ```
 
 Access to the serial and USB devices: see
@@ -145,8 +145,9 @@ The USB uploads use the boot loader the serial upload writes (STM32duino,
 "Maple"): a module flashed once through its serial port can then be
 flashed through USB.
 
-For the CC26xx boards, `flash` writes the boot loader and the firmware
-through the debug probe, see [platforms/cc26xx](../platforms/cc26xx/README.md).
+For the MPM v2, `flash` writes the firmware through its USB-C port, as the
+radio does; the other methods (first install, through the radio, with a
+debugger) are in [platforms/cc26xx](../platforms/cc26xx/README.md#flashing).
 
 ## How it works
 
