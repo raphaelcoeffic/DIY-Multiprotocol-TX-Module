@@ -11,13 +11,13 @@ see [Compiling and programming the STM32 module](Compiling_STM32.md).
 
 ## What you need
 
-Unlike the Arduino IDE, CMake does not install the compiler and the tools:
-install them once, as below. The STM32 core ([lib/stm32f1](../lib/stm32f1))
-is in the repository.
+The compiler is downloaded by CMake when needed, as the Arduino IDE does
+(below). The STM32 core ([lib/stm32f1](../lib/stm32f1)) is in the
+repository. Install once:
 
 | To                | Tools                                                 |
 |-------------------|-------------------------------------------------------|
-| Build             | CMake 3.21 or newer, Ninja, Python 3, the GNU Arm toolchain (`arm-none-eabi-gcc`) |
+| Build             | CMake 3.21 or newer, Ninja, Python 3                  |
 | Flash             | [stm32flash](https://sourceforge.net/projects/stm32flash/files/) (serial), [dfu-util](https://dfu-util.sourceforge.net/releases/) (USB) |
 
 CLion comes with CMake and Ninja, Visual Studio Code needs them installed
@@ -25,25 +25,30 @@ CLion comes with CMake and Ninja, Visual Studio Code needs them installed
 
 ### The compiler
 
-The release builds are made with the compiler of the Arduino board package,
-[xPack GCC 8.3.1-1.4](https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases/tag/v8.3.1-1.4):
-download the archive for your system (`win32-x64.zip`, `darwin-x64.tar.gz`,
-also on Apple silicon Macs, or `linux-x64.tar.gz`), unpack it anywhere, and
-set `ARM_TOOLCHAIN_DIR` (environment variable, or
-`-DARM_TOOLCHAIN_DIR=...` in CMake) to its `bin` directory. With this
-compiler the firmware is the same as the Arduino IDE's.
+When there is no `arm-none-eabi-gcc` in the PATH (and `ARM_TOOLCHAIN_DIR`
+is not set), CMake downloads the compiler of the Arduino board package,
+[xPack GCC 8.3.1-1.4](https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases/tag/v8.3.1-1.4)
+(120 MB, for Windows, macOS and Linux x86-64; on Apple silicon Macs it runs
+with Rosetta), to `build/toolchains`, once. With it the firmware is the same
+as the Arduino IDE's and the releases'.
 
-A newer GNU Arm toolchain in the PATH works too (the firmware is a bit
-smaller with GCC 14), installed as below.
+- `-DARM_TOOLCHAIN_DOWNLOAD=ON`: use the downloaded compiler even when
+  there is one in the PATH (the same firmware as the releases).
+- `ARM_TOOLCHAIN_DIR` (environment variable or `-DARM_TOOLCHAIN_DIR=...`):
+  the `bin` directory of another GNU Arm toolchain. A newer one works too
+  (the firmware is a bit smaller with GCC 14), installed as below.
+
+The compiler of a build directory can't be changed: delete the directory
+(`build/<preset>`) to use another one.
 
 ### Windows
 
 ```
 winget install Kitware.CMake Ninja-build.Ninja Python.Python.3.13
-winget install Arm.GnuArmEmbeddedToolchain
 ```
 
-(or the xPack compiler, above). For flashing, unpack
+and optionally a newer compiler, `winget install Arm.GnuArmEmbeddedToolchain`.
+For flashing, unpack
 `stm32flash-0.7-binaries.zip` and `dfu-util-0.11-binaries.tar.xz` and add
 the directories of `stm32flash.exe` and `dfu-util.exe` to the PATH.
 
@@ -64,20 +69,20 @@ With [Homebrew](https://brew.sh/):
 
 ```
 brew install cmake ninja python stm32flash dfu-util
-brew install --cask gcc-arm-embedded
 ```
 
-(or the xPack compiler, above; not the `arm-none-eabi-gcc` formula, which
-has no C library).
+and optionally a newer compiler, `brew install --cask gcc-arm-embedded`
+(not the `arm-none-eabi-gcc` formula, which has no C library).
 
 ### Linux (Debian, Ubuntu)
 
 ```
-sudo apt install cmake ninja-build python3 stm32flash dfu-util \
-  gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
+sudo apt install cmake ninja-build python3 stm32flash dfu-util
 ```
 
-(or the xPack compiler, above). Access to the serial and USB devices: see
+and optionally a newer compiler (needed on ARM64 Linux, which has no xPack
+GCC 8.3.1): `sudo apt install gcc-arm-none-eabi libnewlib-arm-none-eabi
+libstdc++-arm-none-eabi-newlib`. Access to the serial and USB devices: see
 [Linux](Arduino_IDE_Boards.md#linux) (udev rules, `dialout` and `plugdev`
 groups).
 
