@@ -1,6 +1,7 @@
 # The release files of the STM32 boards, as the buildroot/bin/build_release_*
 # scripts make them, each a firmware with options over _Config.h
-# (MULTI_OPTIONS syntax):
+# (MULTI_OPTIONS syntax), from no protocol selection (-MULTI_AIR, as
+# buildReleaseFiles):
 #
 #   cmake --build --preset stm32f103cb --target releases
 #   cmake --build --preset stm32f103cb --target release-stm32f103-128k-4in1
@@ -14,7 +15,7 @@ set(_releases)
 function(multi_release group name)
   set(dir "${CMAKE_BINARY_DIR}/release/${name}")
   multi_sketch(${name} "${dir}"
-    "${CMAKE_BINARY_DIR}/releases/${group}/${name}-v{version}.bin" ${ARGN})
+    "${CMAKE_BINARY_DIR}/releases/${group}/${name}-v{version}.bin" -MULTI_AIR ${ARGN})
   set_target_properties(${name} ${name}_sketch PROPERTIES EXCLUDE_FROM_ALL ON)
   if(NOT TARGET release-${group})
     add_custom_target(release-${group})
