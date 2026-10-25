@@ -1,7 +1,7 @@
 # GNU Arm Embedded toolchain (arm-none-eabi-gcc)
 #
 # The compiler of the builds is xPack GCC 15.2.1-1.1, downloaded once to
-# build/toolchains. ARM_TOOLCHAIN_DIR (cache or environment variable: the
+# toolchains/ (not in build/: deleting the builds keeps it). ARM_TOOLCHAIN_DIR (cache or environment variable: the
 # toolchain's bin directory) selects another one, and with
 # ARM_TOOLCHAIN_DOWNLOAD=OFF the one in the PATH is used.
 
@@ -10,7 +10,7 @@ set(CMAKE_SYSTEM_PROCESSOR arm)
 
 option(ARM_TOOLCHAIN_DOWNLOAD
   "Use the compiler of the builds (xPack GCC 15.2.1-1.1), downloaded" ON)
-set(ARM_TOOLCHAIN_CACHE "${CMAKE_CURRENT_LIST_DIR}/../build/toolchains" CACHE PATH
+set(ARM_TOOLCHAIN_CACHE "${CMAKE_CURRENT_LIST_DIR}/../toolchains" CACHE PATH
   "Where the compiler is downloaded")
 
 # The CMake checks of the compiler run this file again

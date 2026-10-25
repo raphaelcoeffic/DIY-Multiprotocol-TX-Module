@@ -32,7 +32,7 @@ CLion comes with CMake and Ninja, Visual Studio Code needs them installed
 CMake downloads the compiler of the builds,
 [xPack GCC 15.2.1-1.1](https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases/tag/v15.2.1-1.1)
 (300 MB, for Windows x64, macOS and Linux, Intel and ARM), to
-`build/toolchains`, once, and checks it (SHA-256).
+`toolchains`, once, and checks it (SHA-256). Deleting `build` keeps it.
 
 - `ARM_TOOLCHAIN_DIR` (environment variable or `-DARM_TOOLCHAIN_DIR=...`):
   the `bin` directory of another GNU Arm toolchain, for example the Arduino
