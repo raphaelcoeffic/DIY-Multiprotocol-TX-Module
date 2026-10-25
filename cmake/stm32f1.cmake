@@ -167,7 +167,9 @@ function(maple_firmware target sketch_cpp sketch_dir)
   endif()
   target_link_libraries(${target} PRIVATE -Wl,--start-group maple_core -Wl,--end-group)
   set_target_properties(${target} PROPERTIES SUFFIX .elf
-    LINK_DEPENDS "${MAPLE_VARIANT}/${_ldscript}")
+    LINK_DEPENDS "${MAPLE_VARIANT}/${_ldscript}"
+    # When the firmware does not fit: what to do, after the linker's error
+    RULE_LAUNCH_LINK "\"${Python3_EXECUTABLE}\" \"${CMAKE_SOURCE_DIR}/cmake/multi_link.py\"")
 endfunction()
 
 execute_process(COMMAND ${CMAKE_CXX_COMPILER} -Wl,--help

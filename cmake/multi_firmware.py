@@ -29,6 +29,9 @@ BOARDS = {
     'MULTI_ORANGERX': ('orx', '10', '0'),
 }
 
+FEWER = ('select fewer protocols, in Multiprotocol/_Config.h or with MULTI_OPTIONS '
+         '(docs/Compiling_CMake.md)')
+
 CHANNEL_ORDERS = ['AETR', 'AERT', 'ARET', 'ARTE', 'ATRE', 'ATER', 'EATR', 'EART',
                   'ERAT', 'ERTA', 'ETRA', 'ETAR', 'TEAR', 'TERA', 'TREA', 'TRAE',
                   'TARE', 'TAER', 'RETA', 'REAT', 'RAET', 'RATE', 'RTAE', 'RTEA']
@@ -48,7 +51,8 @@ def size_check(elf, size_tool, max_size, max_data):
           % (data, data * 100 // max_data, max_data - data, max_data))
     ok = True
     if size > max_size:
-        print('error: firmware too big, %d bytes over' % (size - max_size), file=sys.stderr)
+        print('error: firmware too big, %d bytes over: %s' % (size - max_size, FEWER),
+              file=sys.stderr)
         ok = False
     if data > max_data:
         print('error: not enough memory, %d bytes over' % (data - max_data), file=sys.stderr)
@@ -106,20 +110,24 @@ def main():
     ap.add_argument('--copy')
     args = ap.parse_args()
 
-    if not size_check(args.elf, args.size_tool, args.max_size, args.max_data):
-        os.remove(args.bin)
-        sys.exit(1)
-
     ver = version(args.header)
     multi_type, sig = signature(args.preproc, args.board, ver)
+    copy = args.copy or os.path.join(os.path.dirname(args.bin), 'multi-{type}-{version}.bin')
+    copy = copy.format(type=multi_type, version='.'.join(str(v) for v in ver))
+
+    if not size_check(args.elf, args.size_tool, args.max_size, args.max_data):
+        # No firmware left to flash, not even the previous one
+        for f in (args.bin, copy):
+            if os.path.exists(f):
+                os.remove(f)
+        sys.exit(1)
+
     with open(args.bin, 'rb') as f:
         data = f.read()
     if sig.encode() not in data:
         with open(args.bin, 'ab') as f:
             f.write(sig.encode())
     print('Signature: %s' % sig)
-    copy = args.copy or os.path.join(os.path.dirname(args.bin), 'multi-{type}-{version}.bin')
-    copy = copy.format(type=multi_type, version='.'.join(str(v) for v in ver))
     os.makedirs(os.path.dirname(os.path.abspath(copy)), exist_ok=True)
     shutil.copyfile(args.bin, copy)
     print('Firmware: %s' % copy)

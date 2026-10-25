@@ -29,9 +29,12 @@
     },
     {
       "name": "stm32f103c8",
-      "displayName": "STM32F103C8 (64KB)",
+      "displayName": "STM32F103C8 (64KB), CC2500 only",
       "inherits": "base",
-      "cacheVariables": { "MULTI_BOARD": "stm32f103c8", "MULTI_DEBUG": "none" }
+      "cacheVariables": {
+        "MULTI_BOARD": "stm32f103c8", "MULTI_DEBUG": "none",
+        "MULTI_OPTIONS": "-A7105_INSTALLED;-CYRF6936_INSTALLED;-NRF24L01_INSTALLED"
+      }
     },
     {
       "name": "t18int",

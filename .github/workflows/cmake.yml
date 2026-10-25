@@ -225,8 +225,8 @@ jobs:
             build/mpm-v2/mpm-v2-full.hex
             build/xjt-lite/firmware.bin
 
-  # The build on the users' computers: an STM32 firmware with a few
-  # protocols (MULTI_OPTIONS) and the MPM v2
+  # The build on the users' computers: the default STM32 firmware and the
+  # MPM v2
   hosts:
     strategy:
       fail-fast: false
@@ -253,9 +253,9 @@ jobs:
           path: build/toolchains
           key: xpack-arm-none-eabi-gcc-15.2.1-1.1-${{ runner.os }}-${{ runner.arch }}
 
-      - name: STM32F103CB, a few protocols
+      - name: STM32F103CB
         run: |
-          cmake --preset stm32f103cb "-DMULTI_OPTIONS=-*_A7105_INO;-*_CC2500_INO;-*_CYRF6936_INO;-*_NRF24L01_INO;-*_CCNRF_INO;FRSKYX_CC2500_INO;AFHDS2A_A7105_INO;MJXQ_NRF24L01_INO;DSM_CYRF6936_INO"
+          cmake --preset stm32f103cb
           cmake --build --preset stm32f103cb
 
       - name: MPM v2

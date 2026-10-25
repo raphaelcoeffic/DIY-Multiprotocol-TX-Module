@@ -93,7 +93,7 @@ cmake --build --preset stm32f103cb
 | `stm32f103cb`              | STM32F103CB (128KB): 4-in-1, 5-in-1, T-Lite  |
 | `stm32f103cb-usb-debug`    | STM32F103CB, native USB debugging            |
 | `stm32f103cb-serial-debug` | STM32F103CB, serial/FTDI debugging (no boot loader) |
-| `stm32f103c8`              | STM32F103C8 (64KB)                           |
+| `stm32f103c8`              | STM32F103C8 (64KB), CC2500 only              |
 | `t18int`                   | T18 internal 5-in-1                          |
 | `mpm-v2`                   | MPM v2 (CC2652RB), see [platforms/cc26xx](../platforms/cc26xx/README.md) |
 | `mpm-v2-debug`             | MPM v2, debug output on Segger RTT           |
@@ -105,9 +105,12 @@ as `Multiprotocol.bin`), with the signature the radios check, and the size
 is checked as by the Arduino IDE. `build/<preset>/Multiprotocol.elf` is the
 firmware for debuggers.
 
-With all the protocols enabled the STM32 firmware does not fit: as with the
-Arduino IDE, select the protocols you need in `_Config.h`. The CC26xx
-boards have their own configuration,
+All the protocols don't fit in the STM32 firmware: `_Config.h` selects the
+Air protocols by default (`MULTI_AIR`), the `stm32f103c8` preset the CC2500
+ones only. Select the protocols you need in `_Config.h`, as with the Arduino
+IDE, or with `MULTI_OPTIONS` (below); the debug presets need it, the debug
+code takes space. When the firmware is too big, the build says by how much.
+The CC26xx boards have their own configuration,
 [mpm_config.h](../platforms/cc26xx/src/mpm/multi/mpm_config.h).
 
 In CLion or Visual Studio Code, open the repository's folder: the presets
