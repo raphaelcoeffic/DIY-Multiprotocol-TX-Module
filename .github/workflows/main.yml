@@ -3,12 +3,11 @@
 name: MULTI Test, Build, Deploy, Release
 
 on:
-  # Trigger the workflow on pushes, except those that are tagged (avoids double-testing releases)
+  # Trigger the workflow on pushes to the master branch (other branches: through their pull
+  # requests, below, so that a change is built once; tags are not built)
   push:
     branches:
-    - '**'
-    tags-ignore:
-      - '**'
+    - master
     paths:
     - '.github/workflows/**'
     - 'buildroot/bin/**'
