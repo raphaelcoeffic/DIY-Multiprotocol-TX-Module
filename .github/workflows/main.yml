@@ -64,12 +64,16 @@ jobs:
       BOARD: ${{ matrix.board }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Install Arduino CLI
-        uses: arduino/setup-arduino-cli@v2
-        with:
-          version: "0.32.2"
+        run: |
+          # arduino-cli 0.32.2 (arduino/setup-arduino-cli runs on Node.js 20)
+          curl -fsSL -o $RUNNER_TEMP/arduino-cli.tar.gz https://downloads.arduino.cc/arduino-cli/arduino-cli_0.32.2_Linux_64bit.tar.gz
+          echo "325ae8c036518200a9810dcf2cd447d9cb946e7a9ce9b2691db59dfb50048807  $RUNNER_TEMP/arduino-cli.tar.gz" | sha256sum -c -
+          mkdir -p $HOME/.local/bin
+          tar -xzf $RUNNER_TEMP/arduino-cli.tar.gz -C $HOME/.local/bin arduino-cli
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
       
       - name: Prepare build environment
         run: |
@@ -238,12 +242,16 @@ jobs:
       RELEASE: ${{ matrix.release }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Install Arduino CLI
-        uses: arduino/setup-arduino-cli@v2
-        with:
-          version: "0.32.2"
+        run: |
+          # arduino-cli 0.32.2 (arduino/setup-arduino-cli runs on Node.js 20)
+          curl -fsSL -o $RUNNER_TEMP/arduino-cli.tar.gz https://downloads.arduino.cc/arduino-cli/arduino-cli_0.32.2_Linux_64bit.tar.gz
+          echo "325ae8c036518200a9810dcf2cd447d9cb946e7a9ce9b2691db59dfb50048807  $RUNNER_TEMP/arduino-cli.tar.gz" | sha256sum -c -
+          mkdir -p $HOME/.local/bin
+          tar -xzf $RUNNER_TEMP/arduino-cli.tar.gz -C $HOME/.local/bin arduino-cli
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
       
       - name: Prepare build environment
         run: |
@@ -322,7 +330,7 @@ jobs:
 
       - name: 'Upload Artifacts'
         if: env.HAVE_FILES == 'true'
-        uses: actions/upload-artifact/@v4
+        uses: actions/upload-artifact@v6
         with:
           name: multi-${{ matrix.release }}
           path: ./binaries/
@@ -333,7 +341,7 @@ jobs:
     needs: [test, build]
     steps:
       - name: Combine and upload build artifacts
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v6
         with:
           name: multi-test-build
           pattern: multi-*
@@ -347,7 +355,7 @@ jobs:
     needs: deploy
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: multi-test-build
           path: ./artifacts/
@@ -356,7 +364,7 @@ jobs:
         run: ls -R ./artifacts/
       
       - name: Deploy artifacts to release
-        uses: AButler/upload-release-assets@v3.0
+        uses: AButler/upload-release-assets@v4.0.0
         with:
           files: './artifacts/*'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
