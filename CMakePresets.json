@@ -38,6 +38,30 @@
       "displayName": "T18 internal 5-in-1 (128KB)",
       "inherits": "base",
       "cacheVariables": { "MULTI_BOARD": "t18int" }
+    },
+    {
+      "name": "mpm-v2",
+      "displayName": "MPM v2 (CC2652RB)",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "mpm-v2", "MULTI_DEBUG": "none" }
+    },
+    {
+      "name": "mpm-v2-debug",
+      "displayName": "MPM v2 (CC2652RB), debug output on Segger RTT",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "mpm-v2", "MULTI_DEBUG": "rtt" }
+    },
+    {
+      "name": "launchpad",
+      "displayName": "CC2652R1 LaunchPad",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "launchpad", "MULTI_DEBUG": "none" }
+    },
+    {
+      "name": "xjt-lite",
+      "displayName": "FrSky XJT-Lite (CC2650), reduced MPM",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "xjt-lite", "MULTI_DEBUG": "none" }
     }
   ],
   "buildPresets": [
@@ -45,6 +69,10 @@
     { "name": "stm32f103cb-usb-debug", "configurePreset": "stm32f103cb-usb-debug" },
     { "name": "stm32f103cb-serial-debug", "configurePreset": "stm32f103cb-serial-debug" },
     { "name": "stm32f103c8", "configurePreset": "stm32f103c8" },
-    { "name": "t18int", "configurePreset": "t18int" }
+    { "name": "t18int", "configurePreset": "t18int" },
+    { "name": "mpm-v2", "configurePreset": "mpm-v2" },
+    { "name": "mpm-v2-debug", "configurePreset": "mpm-v2-debug" },
+    { "name": "launchpad", "configurePreset": "launchpad" },
+    { "name": "xjt-lite", "configurePreset": "xjt-lite" }
   ]
 }

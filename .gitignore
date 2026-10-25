@@ -1,2 +1,3 @@
 __pycache__
 /build/
+/platforms/cc26xx/tests/*/build/

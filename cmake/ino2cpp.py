@@ -22,7 +22,16 @@ Usage: ino2cpp.py --sketch DIR --main NAME.ino --out FILE.cpp
 The compiler command (without -c, -o and the source file) preprocesses the
 concatenated sketch. --preproc receives the preprocessed lines of the .ino
 files, like the builder's ctags_target_for_gcc_minus_e.cpp, which the binary
-signature is computed from (multi_signature.py).
+signature is computed from (multi_firmware.py).
+
+For the other platforms (platforms/<name>), the .ino files can be built
+without the main sketch:
+
+- --exclude NAME.ino...: files left out (the platform has its own);
+- --prelude FILE.h: included instead of Arduino.h, what the main sketch
+  gives the others; without --main the prototypes follow it;
+- --extern-c: the .ino files in 'extern "C"' (not the prelude), for a
+  platform written in C.
 """
 
 import argparse
@@ -36,10 +45,11 @@ def line_directive(line, path):
     return '#line %d "%s"\n' % (line, path.replace('\\', '\\\\').replace('"', '\\"'))
 
 
-def sketch_files(sketch_dir, main):
+def sketch_files(sketch_dir, main, exclude=()):
     others = sorted(f for f in os.listdir(sketch_dir)
-                    if f.endswith('.ino') and f != main)
-    return [os.path.abspath(os.path.join(sketch_dir, f)) for f in [main] + others]
+                    if f.endswith('.ino') and f != main and f not in exclude)
+    files = [main] + others if main else others
+    return [os.path.abspath(os.path.join(sketch_dir, f)) for f in files]
 
 
 def read(path):
@@ -47,9 +57,9 @@ def read(path):
         return f.read()
 
 
-def merge(files):
+def merge(files, prelude=None):
     """The concatenated sketch, as the builder writes it (before prototypes)."""
-    out = ['#include <Arduino.h>\n']
+    out = ['#include "%s"\n' % prelude if prelude else '#include <Arduino.h>\n']
     for path in files:
         out.append(line_directive(1, path))
         out.append(read(path) + '\n')
@@ -334,15 +344,18 @@ def prototypes(funcs, text):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--sketch', required=True)
-    ap.add_argument('--main', required=True)
+    ap.add_argument('--main', default=None)
+    ap.add_argument('--exclude', nargs='*', default=[])
+    ap.add_argument('--prelude', default=None)
+    ap.add_argument('--extern-c', action='store_true')
     ap.add_argument('--out', required=True)
     ap.add_argument('--preproc', required=True)
     ap.add_argument('compiler', nargs=argparse.REMAINDER)
     args = ap.parse_args()
     cmd = args.compiler[1:] if args.compiler[:1] == ['--'] else args.compiler
 
-    files = sketch_files(args.sketch, args.main)
-    merged = merge(files)
+    files = sketch_files(args.sketch, args.main, args.exclude)
+    merged = merge(files, args.prelude)
 
     out_dir = os.path.dirname(os.path.abspath(args.out))
     os.makedirs(out_dir, exist_ok=True)
@@ -360,15 +373,22 @@ def main():
     funcs = functions(tokenize(sketch_text), sketch_text)
     protos = prototypes(funcs, sketch_text)
 
-    # Before the first function of the main sketch
-    main_file = files[0]
-    first = min((f.line for f in funcs if f.is_definition and f.file == main_file), default=None)
+    # Before the first function of the main sketch, else after the prelude
     block = ''.join(line_directive(f.line, f.file) + p + '\n' for f, p in protos)
-    if first is not None:
-        block += line_directive(first, main_file)
     lines = merged.splitlines(keepends=True)
-    # merged: '#include <Arduino.h>', '#line 1', then the main sketch
-    at = 2 + (first - 1 if first is not None else 0)
+    if args.main:
+        main_file = files[0]
+        first = min((f.line for f in funcs if f.is_definition and f.file == main_file),
+                    default=None)
+        if first is not None:
+            block += line_directive(first, main_file)
+        # merged: '#include <Arduino.h>', '#line 1', then the main sketch
+        at = 2 + (first - 1 if first is not None else 0)
+    else:
+        at = 1
+    if args.extern_c:
+        lines[0] += 'extern "C" {\n'
+        lines.append('}\n')
     result = ''.join(lines[:at]) + block + ''.join(lines[at:])
 
     with open(args.out, 'w', encoding='utf-8', errors='surrogateescape', newline='') as f:

@@ -8,9 +8,15 @@ cmake_minimum_required(VERSION 3.21)
 # The protocols and options are set in Multiprotocol/_Config.h (or
 # _MyConfig.h), as for the Arduino IDE. The firmware is
 # build/<preset>/multi-stm-<version>.bin.
+#
+# The MPM v2 boards (CC26xx) build the same protocol files, with the
+# platform in platforms/cc26xx.
 
-set(MULTI_BOARD "stm32f103cb" CACHE STRING "Board: stm32f103cb, stm32f103c8, t18int")
-set_property(CACHE MULTI_BOARD PROPERTY STRINGS stm32f103cb stm32f103c8 t18int)
+set(MULTI_CC26XX_BOARDS mpm-v2 launchpad xjt-lite)
+set(MULTI_BOARD "stm32f103cb" CACHE STRING
+  "Board: stm32f103cb, stm32f103c8, t18int, mpm-v2, launchpad, xjt-lite")
+set_property(CACHE MULTI_BOARD PROPERTY STRINGS stm32f103cb stm32f103c8 t18int
+  ${MULTI_CC26XX_BOARDS})
 
 if(NOT CMAKE_TOOLCHAIN_FILE)
   set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/arm-none-eabi.cmake")
@@ -27,10 +33,16 @@ foreach(lang C CXX ASM)
   endforeach()
 endforeach()
 
+set(MULTI_SKETCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Multiprotocol" CACHE PATH "The sketch (Multiprotocol.ino)")
+
+if(MULTI_BOARD IN_LIST MULTI_CC26XX_BOARDS)
+  add_subdirectory(platforms/cc26xx)
+  return()
+endif()
+
 include(cmake/stm32f1.cmake)
 
 # The sketch as one C++ file, as the Arduino builder makes it
-set(MULTI_SKETCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Multiprotocol" CACHE PATH "The sketch (Multiprotocol.ino)")
 set(_sketch_cpp "${CMAKE_CURRENT_BINARY_DIR}/sketch/Multiprotocol.ino.cpp")
 set(_preproc "${CMAKE_CURRENT_BINARY_DIR}/sketch/preproc.cpp")
 file(GLOB _sketch_files CONFIGURE_DEPENDS
