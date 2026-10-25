@@ -91,6 +91,16 @@ set(_c_flags -g -Os -w -ffunction-sections -fdata-sections -nostdlib
 
 set(MULTI_C_FLAGS ${_c_flags} -std=gnu11)
 set(MULTI_CXX_FLAGS ${_c_flags} -std=gnu++11 -fno-rtti -fno-exceptions)
+# Bench mode (_Bench.ino): the RF chips driven from a host over the debug
+# serial port. On every C++ compile and the sketch preprocessing, as the
+# Arduino IDE with compiler.cpp.extra_flags=-DMULTI_BENCH
+option(MULTI_BENCH "Bench mode: the RF chips driven from a host (debug builds only)" OFF)
+if(MULTI_BENCH)
+  if(MULTI_DEBUG STREQUAL "none")
+    message(FATAL_ERROR "MULTI_BENCH needs a debug build (MULTI_DEBUG native or ftdi)")
+  endif()
+  list(APPEND MULTI_CXX_FLAGS -DMULTI_BENCH)
+endif()
 set(MULTI_ASM_FLAGS -g -x assembler-with-cpp ${_cpu})
 set(MULTI_DEFINES ${_defines} ${_c_defines})
 
