@@ -56,6 +56,13 @@ target_link_options(toolchain_gcc INTERFACE
   # Link only what is used
   -Wl,--gc-sections
 )
+# GNU ld 2.39 and newer warn of the flash segment's RWX permissions
+# (.init_array is writable); older ones don't know the option, nor the
+# READONLY section keyword that would avoid it
+execute_process(COMMAND ${CMAKE_LINKER} --help OUTPUT_VARIABLE _ld_help ERROR_QUIET)
+if(_ld_help MATCHES "--no-warn-rwx-segments")
+  target_link_options(toolchain_gcc INTERFACE -Wl,--no-warn-rwx-segments)
+endif()
 add_library(toolchain_gcc_m4f INTERFACE)
 target_compile_options(toolchain_gcc_m4f INTERFACE -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16)
 target_link_options(toolchain_gcc_m4f INTERFACE -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16)
