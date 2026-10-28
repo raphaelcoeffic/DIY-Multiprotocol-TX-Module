@@ -2,3 +2,4 @@ __pycache__
 /build/
 /toolchains/
 /platforms/cc26xx/tests/*/build/
+/compile_commands.json

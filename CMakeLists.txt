@@ -24,6 +24,9 @@ endif()
 
 project(Multiprotocol LANGUAGES C CXX ASM)
 
+# build/<preset>/compile_commands.json, for editors (clangd, VS Code)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 # The flags come from the board, whatever the build type
