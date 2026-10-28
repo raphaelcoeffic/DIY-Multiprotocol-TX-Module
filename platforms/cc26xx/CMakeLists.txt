@@ -8,7 +8,7 @@
 #   launchpad  CC2652R1 LaunchPad (LAUNCHXL-CC26X2R1), XDS110
 #   xjt-lite   FrSky XJT-Lite (CC2650F128): reduced MPM, patched OpenOCD
 
-project(MPMv2 VERSION 0.3.0.0 LANGUAGES C CXX ASM)
+project(MPMv2 VERSION 0.4.0.0 LANGUAGES C CXX ASM)
 
 set(CC26XX_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
