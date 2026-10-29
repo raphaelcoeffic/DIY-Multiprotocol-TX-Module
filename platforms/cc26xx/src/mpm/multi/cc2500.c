@@ -140,7 +140,7 @@ static bool _setup(radio_phy_t* phy, frame_t* f)
 
 // FrSky protocols: BOARD_FRSKY_FREQ_STEPS (FSCTRL0 steps) added to the
 // option, so that option 0 lands where stock FrSky receivers listen (their
-// windows are centred 20 to 32 steps below the CC2652's frequency,
+// windows are centred 20 to 32 steps below the CC26xx's frequency,
 // measured on X8R, S8R and V8R4-II receivers)
 #if !defined(BOARD_FRSKY_FREQ_STEPS)
 #define BOARD_FRSKY_FREQ_STEPS 0
