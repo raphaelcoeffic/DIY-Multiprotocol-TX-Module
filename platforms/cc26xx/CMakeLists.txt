@@ -27,6 +27,7 @@ if(MULTI_DEBUG STREQUAL "rtt")
   set(DEBUG ON)
 endif()
 option(USE_CCFG "Include MCU user configuration (CCFG)" ON)
+option(FRSKY_CC26XX_PLAN "FrSky X/X2 on FrSky's CC26xx frequency plan (OFF: the CC2500 plan, FRSKY_FSCTRL0_OFFSET below)" ON)
 
 set(CMAKE_EXECUTABLE_SUFFIX ".elf")
 set(CMAKE_EXECUTABLE_SUFFIX_C ".elf")
