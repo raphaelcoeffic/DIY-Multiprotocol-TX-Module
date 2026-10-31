@@ -170,7 +170,8 @@
 //Comment the protocols you are not using with "//" to save Flash space.
 
 //Already defined protocols selection
-//#define MULTI_AIR			//Only Air protocols will be available, all the others are disabled
+//MULTI_AIR is selected by default: with all the protocols, the firmware does not fit in the 128KB STM32 modules
+#define MULTI_AIR			//Only Air protocols will be available, all the others are disabled
 //#define MULTI_SURFACE		//Only Surface protocols will be available, all the others are disabled
 //#define MULTI_EU			//Only LBT/EU protocols will be available, all the others are disabled
 
@@ -450,7 +451,9 @@
 // Full procedure is located here: https://github.com/pascallanger/DIY-Multiprotocol-TX-Module/blob/master/Protocols_Details.md#protocol-selection-in-ppm-mode
 
 //The parameter below indicates the number of desired banks between 1 and 5. Default is 1.
+#ifndef NBR_BANKS
 #define NBR_BANKS 1
+#endif
 
 const PPM_Parameters PPM_prot[14*NBR_BANKS]=	{
 #if NBR_BANKS > 0

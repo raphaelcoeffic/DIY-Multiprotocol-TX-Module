@@ -1,0 +1,270 @@
+# Workflow for the CMake builds (docs/Compiling_CMake.md): the STM32 release
+# files (cmake/releases.cmake), the same with the Arduino IDE's compiler
+# checked against arduino-cli, the MPM v2 boards (src/, cmake/mpm_v2.cmake)
+# and their host tests, and the build on Windows, macOS and Linux.
+
+name: MULTI CMake Build
+
+# Once per change: pushes to master, and pull requests (from this repository
+# or a fork); other branches by hand (workflow_dispatch)
+on:
+  push:
+    branches:
+      - master
+    paths:
+    - '.github/workflows/cmake.yml'
+    - 'buildroot/bin/**'
+    - 'Multiprotocol/**'
+    - 'CMakeLists.txt'
+    - 'CMakePresets.json'
+    - 'cmake/**'
+    - 'lib/**'
+    - 'src/**'
+    - 'tests/**'
+    - 'tools/**'
+
+  pull_request:
+    branches:
+      - master
+    paths:
+    - '.github/workflows/cmake.yml'
+    - 'buildroot/bin/**'
+    - 'Multiprotocol/**'
+    - 'CMakeLists.txt'
+    - 'CMakePresets.json'
+    - 'cmake/**'
+    - 'lib/**'
+    - 'src/**'
+    - 'tests/**'
+    - 'tools/**'
+
+  workflow_dispatch:
+
+# A new push cancels the run in progress of the same pull request or branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The release files of the STM32 boards with the compiler of the CMake
+  # builds (xPack GCC 15.2.1)
+  stm32:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [stm32f103cb, stm32f103c8, stm32f103cb-usb-debug, stm32f103cb-serial-debug, t18int]
+
+    name: "[CMake] ${{ matrix.preset }}"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Ninja
+        run: pip install ninja
+
+      - name: Cache the compiler
+        uses: actions/cache@v5
+        with:
+          path: toolchains
+          key: xpack-arm-none-eabi-gcc-15.2.1-1.1-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build release files
+        run: |
+          cmake --preset ${{ matrix.preset }}
+          cmake --build --preset ${{ matrix.preset }} --target releases
+          ls -alR build/${{ matrix.preset }}/releases
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmake-${{ matrix.preset }}
+          path: build/${{ matrix.preset }}/releases/
+
+  # With the Arduino IDE's compiler (GCC 8.3.1), the release files are the
+  # same as the main workflow's (arduino-cli, buildroot/bin), byte for byte
+  stm32-identical:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - release: "stm32f103-cc2500-64k"
+            board: "multi4in1:STM32F1:multistm32f103c8:debug_option=none"
+            preset: "stm32f103c8"
+          - release: "stm32f103-cc2500-128k"
+            board: "multi4in1:STM32F1:multistm32f103cb:debug_option=none"
+            preset: "stm32f103cb"
+          - release: "stm32f103-128k-4in1"
+            board: "multi4in1:STM32F1:multistm32f103cb:debug_option=none"
+            preset: "stm32f103cb"
+          - release: "stm32f103-128k-usb-debug"
+            board: "multi4in1:STM32F1:multistm32f103cb:debug_option=native"
+            preset: "stm32f103cb-usb-debug"
+          - release: "stm32f103-128k-serial-debug"
+            board: "multi4in1:STM32F1:multistm32f103cb:debug_option=ftdi"
+            preset: "stm32f103cb-serial-debug"
+          - release: "stm32f103-128k-5in1"
+            board: "multi4in1:STM32F1:multistm32f103cb:debug_option=none"
+            preset: "stm32f103cb"
+          - release: "tlite-5in1"
+            board: "multi4in1:STM32F1:multistm32f103cb:debug_option=none"
+            preset: "stm32f103cb"
+          - release: "t18-5in1"
+            board: "multi4in1:STM32F1:multi5in1t18int"
+            preset: "t18int"
+
+    name: "[Same as Arduino] ${{ matrix.release }}"
+
+    env:
+      BOARD: ${{ matrix.board }}
+      RELEASE: ${{ matrix.release }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Ninja
+        run: pip install ninja
+
+      - name: Install Arduino CLI
+        run: |
+          # arduino-cli 0.32.2 (arduino/setup-arduino-cli runs on Node.js 20)
+          curl -fsSL -o $RUNNER_TEMP/arduino-cli.tar.gz https://downloads.arduino.cc/arduino-cli/arduino-cli_0.32.2_Linux_64bit.tar.gz
+          echo "325ae8c036518200a9810dcf2cd447d9cb946e7a9ce9b2691db59dfb50048807  $RUNNER_TEMP/arduino-cli.tar.gz" | sha256sum -c -
+          mkdir -p $HOME/.local/bin
+          tar -xzf $RUNNER_TEMP/arduino-cli.tar.gz -C $HOME/.local/bin arduino-cli
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install the STM32 board package
+        run: |
+          arduino-cli config init --additional-urls https://raw.githubusercontent.com/pascallanger/DIY-Multiprotocol-TX-Module-Boards/master/package_multi_4in1_board_index.json
+          arduino-cli core update-index
+          arduino-cli core install multi4in1:STM32F1
+
+      - name: Build release files with arduino-cli
+        run: |
+          export PATH=${GITHUB_WORKSPACE}/buildroot/bin:$PATH
+          mkdir -p ./build ./binaries
+          source ./buildroot/bin/buildFunctions
+          getMultiVersion
+          getAllProtocols
+          export MULTI_VERSION ALL_PROTOCOLS
+          buildReleaseFiles
+          git checkout Multiprotocol/_Config.h
+
+      - name: Build release files with CMake
+        run: |
+          export ARM_TOOLCHAIN_DIR=$(echo $HOME/.arduino15/packages/multi4in1/tools/xpack-arm-none-eabi-gcc/*/bin)
+          cmake --preset ${{ matrix.preset }}
+          cmake --build --preset ${{ matrix.preset }} --target release-${{ matrix.release }}
+
+      - name: Compare
+        run: |
+          cd binaries
+          diff <(ls) <(ls ../build/${{ matrix.preset }}/releases/${{ matrix.release }}) || exit 1
+          status=0
+          for f in *.bin; do
+            if cmp -s $f ../build/${{ matrix.preset }}/releases/${{ matrix.release }}/$f; then
+              echo "same $f"
+            else
+              echo "DIFFERENT $f"; status=1
+            fi
+          done
+          exit $status
+
+  # The MPM v2 boards (CC26xx, CC27xx) and their host tests
+  mpm-v2:
+    runs-on: ubuntu-latest
+
+    name: "[CMake] MPM v2 boards"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Ninja
+        run: pip install ninja
+
+      - name: Cache the compiler
+        uses: actions/cache@v5
+        with:
+          path: toolchains
+          key: xpack-arm-none-eabi-gcc-15.2.1-1.1-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build
+        run: |
+          for preset in mpm-v2 mpm-v2-debug launchpad xjt-lite cc2755-lp; do
+            echo "::group::$preset"
+            cmake --preset $preset || exit 1
+            cmake --build --preset $preset || exit 1
+            echo "::endgroup::"
+          done
+
+      - name: Host tests
+        run: |
+          for t in frame mpm storage; do
+            make -C tests/$t || exit 1
+          done
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmake-mpm-v2
+          path: |
+            build/mpm-v2/mpm-v2.bin
+            build/mpm-v2/mpm-v2-full.bin
+            build/mpm-v2/mpm-v2-full.hex
+            build/xjt-lite/firmware.bin
+            build/cc2755-lp/cc27-mpm.bin
+            build/cc2755-lp/cc27-mpm-update.bin
+
+  # The build on the users' computers: the default STM32 firmware and the
+  # MPM v2
+  hosts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    name: "[CMake] ${{ matrix.os }}"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Ninja
+        run: pip install ninja
+
+      - name: Cache the compiler
+        uses: actions/cache@v5
+        with:
+          path: toolchains
+          key: xpack-arm-none-eabi-gcc-15.2.1-1.1-${{ runner.os }}-${{ runner.arch }}
+
+      - name: STM32F103CB
+        run: |
+          cmake --preset stm32f103cb
+          cmake --build --preset stm32f103cb
+
+      - name: MPM v2
+        run: |
+          cmake --preset mpm-v2
+          cmake --build --preset mpm-v2

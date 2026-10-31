@@ -1,0 +1,213 @@
+# Compiling the firmware with CMake
+
+The firmware can be built without the Arduino IDE, from the command line or
+from an IDE with CMake support (CLion, Visual Studio Code with the CMake
+Tools extension): for the STM32 modules, and for the MPM v2 boards (TI
+CC26xx and CC27xx, [MPM v2](MPM_v2.md)), from the same protocol files. The STM32 firmware is built as by the Arduino IDE, with the
+same flags (with the Arduino IDE's compiler, GCC 8.3.1, the binaries are
+identical).
+
+The protocols and options are still selected in
+[Multiprotocol/_Config.h](../Multiprotocol/_Config.h) (or `_MyConfig.h`),
+see [Compiling and programming the STM32 module](Compiling_STM32.md).
+
+## What you need
+
+The compiler is downloaded by CMake (below). The STM32 core
+([lib/stm32f1](../lib/stm32f1)) and the TI libraries are in the
+repository. Install once:
+
+| To                | Tools                                                 |
+|-------------------|-------------------------------------------------------|
+| Build             | CMake 3.21 or newer, Ninja, Python 3                  |
+| Flash (STM32)     | [stm32flash](https://sourceforge.net/projects/stm32flash/files/) (serial), [dfu-util](https://dfu-util.sourceforge.net/releases/) (USB) |
+| Flash (MPM v2)    | nothing more through its USB-C (Python 3.10 or newer); [OpenOCD](https://openocd.org/) for a debugger (J-Link, LaunchPads' XDS110) |
+
+CLion comes with CMake and Ninja, Visual Studio Code needs them installed
+(and the CMake Tools extension).
+
+### The compiler
+
+CMake downloads the compiler of the builds,
+[xPack GCC 15.2.1-1.1](https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases/tag/v15.2.1-1.1)
+(300 MB, for Windows x64, macOS and Linux, Intel and ARM), to
+`toolchains`, once, and checks it (SHA-256). Deleting `build` keeps it.
+
+- `ARM_TOOLCHAIN_DIR` (environment variable or `-DARM_TOOLCHAIN_DIR=...`):
+  the `bin` directory of another GNU Arm toolchain, for example the Arduino
+  IDE's (GCC 8.3.1,
+  `~/Library/Arduino15/packages/multi4in1/tools/xpack-arm-none-eabi-gcc/8.3.1-1.4/bin`
+  on macOS) for the same binaries as the Arduino IDE.
+- `-DARM_TOOLCHAIN_DOWNLOAD=OFF`: the `arm-none-eabi-gcc` in the PATH.
+
+The compiler of a build directory can't be changed: delete the directory
+(`build/<preset>`) to use another one.
+
+### Windows
+
+```
+winget install Kitware.CMake Ninja-build.Ninja Python.Python.3.13
+```
+
+For flashing, unpack `stm32flash-0.7-binaries.zip` and
+`dfu-util-0.11-binaries.tar.xz` and add the directories of `stm32flash.exe`
+and `dfu-util.exe` to the PATH.
+
+Drivers: the module's USB-serial adapter (CH340 or CP210x) and, for USB
+uploads, the Maple DFU driver: run `BootLoaders\Boards\Windows\install_drivers.bat`,
+see [Install device drivers](Arduino_IDE_Boards.md#install-device-drivers).
+The Windows USB DFU devices always need a driver: the boot loader of the
+modules (STM32duino) does not tell Windows to use its generic one.
+
+The serial port is found when the module is the only USB serial device,
+else set `MULTI_FLASH_PORT` to its COM port.
+
+### macOS
+
+With [Homebrew](https://brew.sh/):
+
+```
+brew install cmake ninja python stm32flash dfu-util
+```
+
+### Linux (Debian, Ubuntu)
+
+```
+sudo apt install cmake ninja-build python3 stm32flash dfu-util
+```
+
+Access to the serial and USB devices: see
+[Linux](Arduino_IDE_Boards.md#linux) (udev rules, `dialout` and `plugdev`
+groups).
+
+## Building
+
+```
+cmake --preset stm32f103cb
+cmake --build --preset stm32f103cb
+```
+
+| Preset                     | Board                                        |
+|----------------------------|----------------------------------------------|
+| `stm32f103cb`              | STM32F103CB (128KB): 4-in-1, 5-in-1, T-Lite  |
+| `stm32f103cb-usb-debug`    | STM32F103CB, native USB debugging            |
+| `stm32f103cb-serial-debug` | STM32F103CB, serial/FTDI debugging (no boot loader) |
+| `stm32f103c8`              | STM32F103C8 (64KB), CC2500 only              |
+| `t18int`                   | T18 internal 5-in-1                          |
+| `mpm-v2`                   | MPM v2 (CC2652RB), see [MPM v2](MPM_v2.md)   |
+| `mpm-v2-debug`             | MPM v2, debug output on Segger RTT           |
+| `launchpad`                | CC2652R1 LaunchPad                           |
+| `xjt-lite`                 | FrSky XJT-Lite (CC2650), reduced MPM         |
+| `cc2755-lp`                | CC2755P10 LaunchPad                          |
+
+The STM32 firmware is `build/<preset>/multi-stm-<version>.bin` (the same
+as `Multiprotocol.bin`), with the signature the radios check, and the size
+is checked as by the Arduino IDE. `build/<preset>/Multiprotocol.elf` is the
+firmware for debuggers.
+
+All the protocols don't fit in the STM32 firmware: `_Config.h` selects the
+Air protocols by default (`MULTI_AIR`), the `stm32f103c8` preset the CC2500
+ones only. Select the protocols you need in `_Config.h`, as with the Arduino
+IDE, or with `MULTI_OPTIONS` (below); the debug presets need it, the debug
+code takes space. When the firmware is too big, the build says by how much.
+The MPM v2 boards have their own configuration,
+[mpm_config.h](../src/mpm/multi/mpm_config.h).
+
+In CLion or Visual Studio Code, open the repository's folder: the presets
+are listed as configurations.
+
+### Options without editing `_Config.h`
+
+`MULTI_OPTIONS` sets options over `_Config.h` (and `_MyConfig.h`), a list
+of:
+
+| Option        | In the firmware                                       |
+|---------------|-------------------------------------------------------|
+| `NAME`        | `#define NAME`                                        |
+| `NAME=VALUE`  | `#define NAME VALUE`                                  |
+| `-NAME`       | `#undef NAME`; `*` matches the names in `_Config.h`: `-*_CC2500_INO`, no CC2500 protocol |
+
+applied in that order. For example, FrSky X and DSM only, in TAER order:
+
+```
+cmake --preset stm32f103cb "-DMULTI_OPTIONS=-*_A7105_INO;-*_CC2500_INO;-*_CYRF6936_INO;-*_NRF24L01_INO;-*_CCNRF_INO;FRSKYX_CC2500_INO;DSM_CYRF6936_INO;-AETR;TAER"
+cmake --build --preset stm32f103cb
+```
+
+In CLion, in the CMake profile's options (`-DMULTI_OPTIONS=...`); `cmake
+--preset stm32f103cb -DMULTI_OPTIONS=` clears them. The options are in a
+header the build generates (`build/<preset>/sketch/multi_options.h`),
+included after `_Config.h`.
+
+### Release files
+
+```
+cmake --build --preset stm32f103cb --target releases
+```
+
+builds the release files of the board, as the GitHub workflow publishes
+them, to `build/<preset>/releases/<group>/<name>-v<version>.bin` (for
+example `releases/stm32f103-128k-4in1/mm-stm-serial-aetr-air-v1.3.4.74.bin`),
+all at once; `--target release-stm32f103-128k-4in1` builds one group. They
+are listed in [cmake/releases.cmake](../cmake/releases.cmake), each with its
+options (`MULTI_OPTIONS`), and use `_Config.h` without your `MULTI_OPTIONS`.
+With GCC 8.3.1 (`ARM_TOOLCHAIN_DIR`, above) they are the same as the
+release files of the Arduino builds (`buildroot/bin`).
+
+## Flashing
+
+```
+cmake --build --preset stm32f103cb --target flash
+```
+
+builds the firmware and flashes it as the Arduino IDE uploads it, with
+[stm32flash](https://sourceforge.net/projects/stm32flash/) and
+[dfu-util](https://dfu-util.sourceforge.net/) (Homebrew, apt:
+`stm32flash`, `dfu-util`):
+
+| Method          | How                                                              |
+|-----------------|------------------------------------------------------------------|
+| `auto`          | `usb` if a Maple USB device is connected, else `serial` (default)|
+| `serial`        | Through the module's USB-serial port: erases the flash, writes the boot loader and the firmware |
+| `usb`           | Maple USB boot loader (dfu-util), default of `stm32f103cb-usb-debug` |
+| `serial-noboot` | Serial, without boot loader, default of `stm32f103cb-serial-debug` |
+
+The method is set with `-DMULTI_FLASH_METHOD=...`. The serial port is
+found when there is only one USB serial port, else set it with
+`-DMULTI_FLASH_PORT=/dev/ttyUSB0` (`COM3` on Windows) or in the
+`MULTI_FLASH_PORT` environment variable. For the `usb` method, a running
+firmware with USB is first reset to the boot loader through its USB serial
+port. The serial ports are Python's pyserial, in the repository
+([lib/pyserial](../lib/pyserial/README.md)): nothing to install.
+
+The USB uploads use the boot loader the serial upload writes (STM32duino,
+"Maple"): a module flashed once through its serial port can then be
+flashed through USB.
+
+Plugged into a computer, such a module stays in its boot loader
+("Maple 003") at power up, even with an external supply: the boot loader
+sees the USB host and waits to be flashed. To run the firmware over USB
+(USB power is enough, RF included):
+
+```
+cmake --build --preset stm32f103cb --target start
+```
+
+starts it without writing anything (`multi_flash.py --method start`, with
+the libusb that dfu-util uses). A firmware with USB support then shows up
+as a serial port ("Maple"); after that, unplugging and replugging USB with
+an external supply connected keeps it running.
+
+For the MPM v2, `flash` writes the firmware through its USB-C port, as the
+radio does; the other methods (first install, through the radio, with a
+debugger) are in [MPM v2](MPM_v2.md#flashing).
+
+## How it works
+
+The Arduino IDE builds the `.ino` files as one C++ file, with prototypes for
+their functions. [cmake/ino2cpp.py](../cmake/ino2cpp.py) does the same, by
+the same rules; for the MPM v2 boards, without `Multiprotocol.ino` and the
+STM32 hardware files, on a prelude of the port (`src/mpm/sketch`). [cmake/multi_firmware.py](../cmake/multi_firmware.py)
+checks the size and appends the signature, as the board package does. The
+flags of each board are in [cmake/stm32f1.cmake](../cmake/stm32f1.cmake),
+from the board package's `boards.txt` and `platform.txt`.
