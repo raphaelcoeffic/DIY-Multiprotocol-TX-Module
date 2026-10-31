@@ -1,9 +1,9 @@
 # pyserial
 
 The serial ports for the flashing scripts, so that they run with Python
-alone (no pip, venv or uv): [cmake/multi_flash.py](../../cmake/multi_flash.py)
-(STM32) and the MPM v2's `platforms/cc26xx/tools` (`stk500_flash.py`,
-`rom_flash.py`, `mpm_fs.py`). They add this directory to `sys.path`.
+alone (no pip, venv or uv): the MPM v2's [tools](../../tools)
+(`stk500_flash.py`, `rom_flash.py`, `mpm_fs.py`) and, in the MULTI-Module
+repo, `cmake/multi_flash.py` (STM32). They add this directory to `sys.path`.
 
 [pyserial](https://github.com/pyserial/pyserial) 3.5, from the PyPI wheel
 (`pyserial-3.5-py2.py3-none-any.whl`, SHA-256

@@ -1,7 +1,7 @@
 # Workflow for the CMake builds (docs/Compiling_CMake.md): the STM32 release
 # files (cmake/releases.cmake), the same with the Arduino IDE's compiler
-# checked against arduino-cli, the MPM v2 boards (platforms/cc26xx) and their
-# host tests, and the build on Windows, macOS and Linux.
+# checked against arduino-cli, the MPM v2 boards (src/, cmake/mpm_v2.cmake)
+# and their host tests, and the build on Windows, macOS and Linux.
 
 name: MULTI CMake Build
 
@@ -19,7 +19,9 @@ on:
     - 'CMakePresets.json'
     - 'cmake/**'
     - 'lib/**'
-    - 'platforms/**'
+    - 'src/**'
+    - 'tests/**'
+    - 'tools/**'
 
   pull_request:
     branches:
@@ -32,7 +34,9 @@ on:
     - 'CMakePresets.json'
     - 'cmake/**'
     - 'lib/**'
-    - 'platforms/**'
+    - 'src/**'
+    - 'tests/**'
+    - 'tools/**'
 
   workflow_dispatch:
 
@@ -178,8 +182,8 @@ jobs:
           done
           exit $status
 
-  # The MPM v2 boards (CC26xx) and their host tests
-  cc26xx:
+  # The MPM v2 boards (CC26xx, CC27xx) and their host tests
+  mpm-v2:
     runs-on: ubuntu-latest
 
     name: "[CMake] MPM v2 boards"
@@ -202,7 +206,7 @@ jobs:
 
       - name: Build
         run: |
-          for preset in mpm-v2 mpm-v2-debug launchpad xjt-lite; do
+          for preset in mpm-v2 mpm-v2-debug launchpad xjt-lite cc2755-lp; do
             echo "::group::$preset"
             cmake --preset $preset || exit 1
             cmake --build --preset $preset || exit 1
@@ -212,7 +216,7 @@ jobs:
       - name: Host tests
         run: |
           for t in frame mpm storage; do
-            make -C platforms/cc26xx/tests/$t || exit 1
+            make -C tests/$t || exit 1
           done
 
       - name: Upload Artifacts
@@ -224,6 +228,8 @@ jobs:
             build/mpm-v2/mpm-v2-full.bin
             build/mpm-v2/mpm-v2-full.hex
             build/xjt-lite/firmware.bin
+            build/cc2755-lp/cc27-mpm.bin
+            build/cc2755-lp/cc27-mpm-update.bin
 
   # The build on the users' computers: the default STM32 firmware and the
   # MPM v2

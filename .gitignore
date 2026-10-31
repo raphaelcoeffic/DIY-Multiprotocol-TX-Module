@@ -1,5 +1,5 @@
 __pycache__
 /build/
 /toolchains/
-/platforms/cc26xx/tests/*/build/
+/tests/*/build/
 /compile_commands.json

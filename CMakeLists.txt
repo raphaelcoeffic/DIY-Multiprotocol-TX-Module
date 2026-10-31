@@ -9,20 +9,25 @@ cmake_minimum_required(VERSION 3.21)
 # _MyConfig.h), as for the Arduino IDE. The firmware is
 # build/<preset>/multi-stm-<version>.bin.
 #
-# The MPM v2 boards (CC26xx) build the same protocol files, with the
-# platform in platforms/cc26xx.
+# The MPM v2 boards (CC26xx, CC27xx) build the same protocol files, with the
+# code in src/ (cmake/mpm_v2.cmake).
 
-set(MULTI_CC26XX_BOARDS mpm-v2 launchpad xjt-lite)
+set(MULTI_V2_BOARDS mpm-v2 launchpad xjt-lite cc2755-lp)
 set(MULTI_BOARD "stm32f103cb" CACHE STRING
-  "Board: stm32f103cb, stm32f103c8, t18int, mpm-v2, launchpad, xjt-lite")
+  "Board: stm32f103cb, stm32f103c8, t18int, mpm-v2, launchpad, xjt-lite, cc2755-lp")
 set_property(CACHE MULTI_BOARD PROPERTY STRINGS stm32f103cb stm32f103c8 t18int
-  ${MULTI_CC26XX_BOARDS})
+  ${MULTI_V2_BOARDS})
 
 if(NOT CMAKE_TOOLCHAIN_FILE)
   set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/arm-none-eabi.cmake")
 endif()
 
-project(Multiprotocol LANGUAGES C CXX ASM)
+if(MULTI_BOARD IN_LIST MULTI_V2_BOARDS)
+  # The MPM v2's version, reported to the radio (the mpm-v2 repo's)
+  project(MPMv2 VERSION 0.4.0.0 LANGUAGES C CXX ASM)
+else()
+  project(Multiprotocol LANGUAGES C CXX ASM)
+endif()
 
 # build/<preset>/compile_commands.json, for editors (clangd, VS Code)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -38,8 +43,8 @@ endforeach()
 
 set(MULTI_SKETCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Multiprotocol" CACHE PATH "The sketch (Multiprotocol.ino)")
 
-if(MULTI_BOARD IN_LIST MULTI_CC26XX_BOARDS)
-  add_subdirectory(platforms/cc26xx)
+if(MULTI_BOARD IN_LIST MULTI_V2_BOARDS)
+  include(cmake/mpm_v2.cmake)
   return()
 endif()
 

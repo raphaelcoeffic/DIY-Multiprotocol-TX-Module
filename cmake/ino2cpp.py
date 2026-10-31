@@ -24,8 +24,8 @@ concatenated sketch. --preproc receives the preprocessed lines of the .ino
 files, like the builder's ctags_target_for_gcc_minus_e.cpp, which the binary
 signature is computed from (multi_firmware.py).
 
-For the other platforms (platforms/<name>), the .ino files can be built
-without the main sketch:
+For the MPM v2 (src/mpm/sketch), the .ino files can be built without the
+main sketch:
 
 - --exclude NAME.ino...: files left out (the platform has its own);
 - --prelude FILE.h: included instead of Arduino.h, what the main sketch
