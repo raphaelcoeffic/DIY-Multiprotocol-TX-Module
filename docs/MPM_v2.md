@@ -89,7 +89,7 @@ files for each application, as for the STM32, with
 | `lib/SeggerRTT/`           | Segger RTT (debug output)                                     |
 | `lib/littlefs/`            | littlefs 2.10 (`lfs.c`, `lfs_util.c`), BSD-3-Clause          |
 | `tools/`                   | `fw_image.py` (the file for the radio), flashing (`stk500_flash.py`, `rom_flash.py`, `flash_jlink.sh`, `flash_dslite.sh`), CC27xx CCFG and PHY generators, EEPROM and file system tools |
-| `tests/`                   | host tests (`make -C tests`: `tests/frame`, `tests/mpm`, `tests/storage`) |
+| `tests/`                   | host tests (`make -C tests`: `tests/frame`, `tests/mpm`, `tests/storage`, `tests/eeprom_ram`) |
 | `cmake/mpm_v2.cmake`       | the compiler options and boards (this repository only)        |
 
 `src/` (but `src/mpm/sketch`), `lib/` (but `lib/stm32f1`), `tools/` and
