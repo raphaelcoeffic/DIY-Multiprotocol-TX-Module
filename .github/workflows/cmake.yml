@@ -214,10 +214,7 @@ jobs:
           done
 
       - name: Host tests
-        run: |
-          for t in frame mpm storage; do
-            make -C tests/$t || exit 1
-          done
+        run: make -C tests
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v6

@@ -22,8 +22,8 @@ cmake --build --preset mpm-v2 --target flash
 In `build/mpm-v2`: `mpm-v2.bin` for the radio (flashed from EdgeTX),
 `mpm-v2-full.bin` / `.hex` for a first install (boot loader and
 application), `firmware.elf` for debuggers. `mpm-v2-debug` sends debug
-output to Segger RTT. Each board also builds a radio bench (`bench`,
-`cc27-bench`) and bring-up applications.
+output to Segger RTT. The MPM v2, its LaunchPad and the CC2755 LaunchPad
+also build a radio bench (`bench`, `cc27-bench`).
 
 The CC2755 LaunchPad runs the MPM on its XDS110's UART (100000 8E2, the
 radio's link): `cc27-mpm.bin` behind the boot loader at 0x2000,
@@ -89,7 +89,7 @@ files for each application, as for the STM32, with
 | `lib/SeggerRTT/`           | Segger RTT (debug output)                                     |
 | `lib/littlefs/`            | littlefs 2.10 (`lfs.c`, `lfs_util.c`), BSD-3-Clause          |
 | `tools/`                   | `fw_image.py` (the file for the radio), flashing (`stk500_flash.py`, `rom_flash.py`, `flash_jlink.sh`, `flash_dslite.sh`), CC27xx CCFG and PHY generators, EEPROM and file system tools |
-| `tests/`                   | host tests (`make -C tests/frame`, `tests/mpm`, `tests/storage`) |
+| `tests/`                   | host tests (`make -C tests`: `tests/frame`, `tests/mpm`, `tests/storage`) |
 | `cmake/mpm_v2.cmake`       | the compiler options and boards (this repository only)        |
 
 `src/` (but `src/mpm/sketch`), `lib/` (but `lib/stm32f1`), `tools/` and
