@@ -1,0 +1,88 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake"
+    },
+    {
+      "name": "stm32f103cb",
+      "displayName": "STM32F103CB (128KB)",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "stm32f103cb", "MULTI_DEBUG": "none" }
+    },
+    {
+      "name": "stm32f103cb-usb-debug",
+      "displayName": "STM32F103CB (128KB), native USB debugging",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "stm32f103cb", "MULTI_DEBUG": "native" }
+    },
+    {
+      "name": "stm32f103cb-serial-debug",
+      "displayName": "STM32F103CB (128KB), serial/FTDI debugging",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "stm32f103cb", "MULTI_DEBUG": "ftdi" }
+    },
+    {
+      "name": "stm32f103c8",
+      "displayName": "STM32F103C8 (64KB), CC2500 only",
+      "inherits": "base",
+      "cacheVariables": {
+        "MULTI_BOARD": "stm32f103c8", "MULTI_DEBUG": "none",
+        "MULTI_OPTIONS": "-A7105_INSTALLED;-CYRF6936_INSTALLED;-NRF24L01_INSTALLED"
+      }
+    },
+    {
+      "name": "t18int",
+      "displayName": "T18 internal 5-in-1 (128KB)",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "t18int" }
+    },
+    {
+      "name": "mpm-v2",
+      "displayName": "MPM v2 (CC2652RB)",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "mpm-v2", "MULTI_DEBUG": "none" }
+    },
+    {
+      "name": "mpm-v2-debug",
+      "displayName": "MPM v2 (CC2652RB), debug output on Segger RTT",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "mpm-v2", "MULTI_DEBUG": "rtt" }
+    },
+    {
+      "name": "launchpad",
+      "displayName": "CC2652R1 LaunchPad",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "launchpad", "MULTI_DEBUG": "none" }
+    },
+    {
+      "name": "xjt-lite",
+      "displayName": "FrSky XJT-Lite (CC2650), reduced MPM",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "xjt-lite", "MULTI_DEBUG": "none" }
+    },
+    {
+      "name": "cc2755-lp",
+      "displayName": "CC2755P10 LaunchPad (LP-EM-CC2755P10)",
+      "inherits": "base",
+      "cacheVariables": { "MULTI_BOARD": "cc2755-lp", "MULTI_DEBUG": "none" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "stm32f103cb", "configurePreset": "stm32f103cb" },
+    { "name": "stm32f103cb-usb-debug", "configurePreset": "stm32f103cb-usb-debug" },
+    { "name": "stm32f103cb-serial-debug", "configurePreset": "stm32f103cb-serial-debug" },
+    { "name": "stm32f103c8", "configurePreset": "stm32f103c8" },
+    { "name": "t18int", "configurePreset": "t18int" },
+    { "name": "mpm-v2", "configurePreset": "mpm-v2" },
+    { "name": "mpm-v2-debug", "configurePreset": "mpm-v2-debug" },
+    { "name": "launchpad", "configurePreset": "launchpad" },
+    { "name": "xjt-lite", "configurePreset": "xjt-lite" },
+    { "name": "cc2755-lp", "configurePreset": "cc2755-lp" }
+  ]
+}

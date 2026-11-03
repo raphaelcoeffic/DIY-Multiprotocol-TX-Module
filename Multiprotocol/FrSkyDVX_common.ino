@@ -365,14 +365,72 @@ void Frsky_init_clone(void)
 		{ CC2500_03_FIFOTHR,  0x07 },
 		{ CC2500_09_ADDR,     0x00 } };
 
+	// FrSky's frequency plans. Their CC2500 gear (XJT, the receivers) hops on
+	// CHANNR: FREQ + channel * 299.927 kHz, and sits 30 to 40 kHz below it.
+	// Their CC26xx gear (XJT-Lite, G-RX6/8) hops on FREQ rounded to the MHz
+	// - 30 kHz + channel * 300 kHz. A platform whose radio sits at the nominal
+	// frequency (the MPM v2's CC26xx) defines:
+	// - FRSKY_CC26XX_PLAN: X and X2 on the CC26xx plan, as FrSky's CC26xx gear
+	// - FRSKY_FSCTRL0_OFFSET: FSCTRL0 steps added to the option for D, V (and
+	//   X, X2 without the plan), down to where FrSky's CC2500 gear listens
+	#ifndef FRSKY_FSCTRL0_OFFSET
+		#define FRSKY_FSCTRL0_OFFSET 0
+	#endif
+	#ifdef FRSKY_CC26XX_PLAN
+		static uint32_t FrSky_freq_base;	// FREQ2..0 of the conf
+	#endif
+
+	static bool __attribute__((unused)) FrSky_cc26xx_plan()
+	{
+		#ifdef FRSKY_CC26XX_PLAN
+			return protocol==PROTO_FRSKYX || protocol==PROTO_FRSKYX2;
+		#else
+			return false;
+		#endif
+	}
+
+	// FSCTRL0 for the option
+	static uint8_t __attribute__((unused)) FrSky_fsctrl0()
+	{
+		#if FRSKY_FSCTRL0_OFFSET
+			if(protocol!=PROTO_FRSKYL && !FrSky_cc26xx_plan())
+			{
+				int16_t val=(int8_t)option+FRSKY_FSCTRL0_OFFSET;
+				return val<-128?-128:(val>127?127:val);
+			}
+		#endif
+		return option;
+	}
+
+	// The option to FSCTRL0 after a change
+	static void __attribute__((unused)) FrSky_SetFreqOffset()
+	{
+		#if FRSKY_FSCTRL0_OFFSET
+			if(prev_option != option)
+			{
+				prev_option = option;
+				CC2500_WriteReg(CC2500_0C_FSCTRL0, FrSky_fsctrl0());
+			}
+		#else
+			CC2500_SetFreqOffset();
+		#endif
+	}
+
 	void FRSKY_init_cc2500(const uint8_t *ptr)
 	{
+		#ifdef FRSKY_CC26XX_PLAN
+			FrSky_freq_base=0;
+		#endif
 		for(uint8_t i=0;i<19;i++)
 		{
 			uint8_t reg=pgm_read_byte_near(&FRSKY_common_startreg_cc2500_conf[i]);
 			uint8_t val=pgm_read_byte_near(&ptr[i]);
 			if(reg==CC2500_0C_FSCTRL0)
-				val=option;
+				val=FrSky_fsctrl0();
+			#ifdef FRSKY_CC26XX_PLAN
+				if(reg>=CC2500_0D_FREQ2 && reg<=CC2500_0F_FREQ0)
+					FrSky_freq_base=FrSky_freq_base<<8 | val;
+			#endif
 			CC2500_WriteReg(reg,val);
 		}
 		for(uint8_t i=0;i<17;i++)
@@ -422,7 +480,7 @@ void Frsky_init_clone(void)
 					packet[start] |= FrSkyX_TX_IN_Seq&0x03;
 					packet[start+1]  = FrSkyX_TX_Frames[FrSkyX_TX_IN_Seq&0x03].count;
 					for (uint8_t i=start+2;i<start+2+FrSkyX_TX_Frames[FrSkyX_TX_IN_Seq&0x03].count;i++)
-						packet[i] = FrSkyX_TX_Frames[FrSkyX_TX_IN_Seq&0x03].payload[i];
+						packet[i] = FrSkyX_TX_Frames[FrSkyX_TX_IN_Seq&0x03].payload[i-start-2];
 				}
 				else if ( FrSkyX_TX_Seq != 0x08 )
 				{
@@ -436,7 +494,7 @@ void Frsky_init_clone(void)
 							if(SportHead==SportTail)
 								break; //buffer empty
 							packet[i]=SportData[SportHead];
-							FrSkyX_TX_Frames[FrSkyX_TX_Seq].payload[i-start+2]=SportData[SportHead];
+							FrSkyX_TX_Frames[FrSkyX_TX_Seq].payload[i-start-2]=SportData[SportHead];
 							SportHead=(SportHead+1) & (MAX_SPORT_BUFFER-1);
 							nbr_bytes++;
 						}
@@ -463,7 +521,7 @@ void Frsky_init_clone(void)
 						packet[start] |= FrSkyX_TX_IN_Seq;
 						packet[start+1] = FrSkyX_TX_Frames[FrSkyX_TX_IN_Seq].count;
 						for (uint8_t i=start+2;i<start+2+FrSkyX_TX_Frames[FrSkyX_TX_IN_Seq].count;i++)
-							packet[i] = FrSkyX_TX_Frames[FrSkyX_TX_IN_Seq].payload[i-start+2];
+							packet[i] = FrSkyX_TX_Frames[FrSkyX_TX_IN_Seq].payload[i-start-2];
 					}
 				}
 				else
@@ -501,12 +559,29 @@ void Frsky_init_clone(void)
 #endif
 
 #if defined(FRSKYX_CC2500_INO) || defined(FRSKYL_CC2500_INO)
+// The RF channel: CHANNR, or FREQ on FrSky's CC26xx plan
+static void __attribute__((unused)) FrSkyX_set_channel(uint8_t ch)
+{
+	#ifdef FRSKY_CC26XX_PLAN
+		if(FrSky_cc26xx_plan())
+		{// In FREQ steps (26 MHz / 2^16): 300 kHz = 756.185, 30 kHz = 76 (+150 Hz)
+			uint32_t freq=FrSky_freq_base - 76 + (ch * 756185UL + 500) / 1000;
+			CC2500_WriteReg(CC2500_0D_FREQ2, freq>>16);
+			CC2500_WriteReg(CC2500_0E_FREQ1, freq>>8);
+			CC2500_WriteReg(CC2500_0F_FREQ0, freq);
+			CC2500_WriteReg(CC2500_0A_CHANNR, 0);
+			return;
+		}
+	#endif
+	CC2500_WriteReg(CC2500_0A_CHANNR, ch);
+}
+
 static void __attribute__((unused)) FrSkyX_set_start(uint8_t ch )
 {
 	CC2500_Strobe(CC2500_SIDLE);
 	CC2500_WriteReg(CC2500_25_FSCAL1, calData[ch]);
-	CC2500_WriteReg(CC2500_0A_CHANNR, hopping_frequency[ch]);
-}		
+	FrSkyX_set_channel(hopping_frequency[ch]);
+}
 
 static void __attribute__((unused)) FrSkyX_RF_init()
 {
@@ -526,8 +601,8 @@ static void __attribute__((unused)) FrSkyX_RF_init()
 	//
 	for(uint8_t c=0;c < 48;c++)
 	{//calibrate hop channels
-		CC2500_Strobe(CC2500_SIDLE);    
-		CC2500_WriteReg(CC2500_0A_CHANNR,hopping_frequency[c]);
+		CC2500_Strobe(CC2500_SIDLE);
+		FrSkyX_set_channel(hopping_frequency[c]);
 		CC2500_Strobe(CC2500_SCAL);
 		delayMicroseconds(900);//
 		calData[c] = CC2500_ReadReg(CC2500_25_FSCAL1);
