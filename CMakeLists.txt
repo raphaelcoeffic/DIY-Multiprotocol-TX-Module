@@ -12,9 +12,9 @@ cmake_minimum_required(VERSION 3.21)
 # The MPM v2 boards (CC26xx, CC27xx) build the same protocol files, with the
 # code in src/ (cmake/mpm_v2.cmake).
 
-set(MULTI_V2_BOARDS mpm-v2 launchpad xjt-lite cc2755-lp)
+set(MULTI_V2_BOARDS mpm-v2 launchpad xjt-lite cc2755-lp zbdongle-p)
 set(MULTI_BOARD "stm32f103cb" CACHE STRING
-  "Board: stm32f103cb, stm32f103c8, t18int, mpm-v2, launchpad, xjt-lite, cc2755-lp")
+  "Board: stm32f103cb, stm32f103c8, t18int, mpm-v2, launchpad, xjt-lite, cc2755-lp, zbdongle-p")
 set_property(CACHE MULTI_BOARD PROPERTY STRINGS stm32f103cb stm32f103c8 t18int
   ${MULTI_V2_BOARDS})
 

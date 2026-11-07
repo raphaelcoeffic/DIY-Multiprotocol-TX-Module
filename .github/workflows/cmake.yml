@@ -206,7 +206,7 @@ jobs:
 
       - name: Build
         run: |
-          for preset in mpm-v2 mpm-v2-debug launchpad xjt-lite cc2755-lp; do
+          for preset in mpm-v2 mpm-v2-debug launchpad xjt-lite cc2755-lp zbdongle-p; do
             echo "::group::$preset"
             cmake --preset $preset || exit 1
             cmake --build --preset $preset || exit 1
@@ -227,6 +227,7 @@ jobs:
             build/xjt-lite/firmware.bin
             build/cc2755-lp/cc27-mpm.bin
             build/cc2755-lp/cc27-mpm-update.bin
+            build/zbdongle-p/zbdongle-p-firmware.bin
 
   # The build on the users' computers: the default STM32 firmware and the
   # MPM v2

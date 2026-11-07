@@ -12,6 +12,7 @@ modules, built unchanged: [Multiprotocol/*.ino](../Multiprotocol).
 | `launchpad`                   | CC2652R1 LaunchPad (LAUNCHXL-CC26X2R1)        | XDS110 (OpenOCD)  |
 | `xjt-lite`                    | FrSky XJT-Lite (CC2650F128), reduced MPM      | patched OpenOCD, cJTAG, J-Link |
 | `cc2755-lp`                   | CC2755P10 LaunchPad (LP-EM-CC2755P10)         | XDS110, OpenOCD with the cc27xx driver |
+| `zbdongle-p`                  | Sonoff ZBDongle-P (CC2652P), the radio link on its CP2102N | its USB, ROM boot loader |
 
 ```
 cmake --preset mpm-v2

@@ -99,6 +99,7 @@ cmake --build --preset stm32f103cb
 | `launchpad`                | CC2652R1 LaunchPad                           |
 | `xjt-lite`                 | FrSky XJT-Lite (CC2650), reduced MPM         |
 | `cc2755-lp`                | CC2755P10 LaunchPad                          |
+| `zbdongle-p`               | Sonoff ZBDongle-P (CC2652P)                  |
 
 The STM32 firmware is `build/<preset>/multi-stm-<version>.bin` (the same
 as `Multiprotocol.bin`), with the signature the radios check, and the size

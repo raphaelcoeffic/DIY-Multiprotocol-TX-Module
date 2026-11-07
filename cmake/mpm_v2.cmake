@@ -10,6 +10,8 @@
 #   xjt-lite   FrSky XJT-Lite (CC2650F128): reduced MPM, patched OpenOCD
 #   cc2755-lp  CC2755P10 LaunchPad (LP-EM-CC2755P10), XDS110, OpenOCD with
 #              the cc27xx driver
+#   zbdongle-p Sonoff ZBDongle-P (CC2652P): the radio on its CP2102N, ROM boot
+#              loader
 
 if(MULTI_BOARD STREQUAL "mpm-v2")
   set(BOARD MPM_V2)
@@ -19,6 +21,8 @@ elseif(MULTI_BOARD STREQUAL "xjt-lite")
   set(BOARD XJT_LITE)
 elseif(MULTI_BOARD STREQUAL "cc2755-lp")
   set(BOARD CC2755P10_LP)
+elseif(MULTI_BOARD STREQUAL "zbdongle-p")
+  set(BOARD ZBDONGLE_P)
 else()
   message(FATAL_ERROR "MULTI_BOARD=${MULTI_BOARD}: not an MPM v2 board")
 endif()

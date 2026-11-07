@@ -36,6 +36,10 @@ const mpm_protocol_t mpm_protocols[] = {
   {PROTO_MJXQ, "MJXq", "\x07" "WLH08\0 " "X600\0  " "X800\0  " "H26D\0  " "E010\0  " "H26WH\0 " "Phoenix", 7,
    MPM_OPTION_NONE, false, false, MJXQ_init, MJXQ_callback, end_bind_counter},
 #endif
+#ifdef FUTABA_CC2500_INO
+  {PROTO_FUTABA, "Futaba", "\x05" "SFHSS", 1, MPM_OPTION_RFTUNE, true, true, SFHSS_init, SFHSS_callback,
+   0},
+#endif
 #ifdef FRSKYV_CC2500_INO
   {PROTO_FRSKYV, "FrSky V", 0, 0, MPM_OPTION_RFTUNE, false, false, FRSKYV_init, FRSKYV_callback, 0},
 #endif
@@ -71,8 +75,8 @@ const mpm_protocol_t mpm_protocols[] = {
   {PROTO_MOFLY, "MoFly", 0, 0, MPM_OPTION_RFTUNE, false, false, XK_init, XK_callback, end_bind_counter},
 #endif
 #ifdef FASST_INO
-  {PROTO_FASST, "FASST", "\x04" "10ch", 1, MPM_OPTION_NONE, true, false, FASST_init, FASST_callback,
-   0},
+  {PROTO_FASST, "FASST", "\x04" "10ch" "MULT" "7ch " "FT18" "FT12", 5, MPM_OPTION_NONE, true, false,
+   FASST_init, FASST_callback, 0},
 #endif
   {PROTO_TEST, "Test", "\x04" "1M  250k", 2, MPM_OPTION_RFCHAN, false, false, TEST_init, TEST_callback, 0},
 };

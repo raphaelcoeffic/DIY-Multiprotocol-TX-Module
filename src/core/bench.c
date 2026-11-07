@@ -28,7 +28,7 @@
 //                                their framing: frskyd frskyx frskyx2 frskyxeu
 //                                frskyx2eu hott hitec redpine
 //                                redpineslow skyartec frskyv corona coronav2
-//                                fdv3 ares radiolink ikea sfhss, A7105 ones:
+//                                fdv3 ares radiolink ikea sfhss tfhss, A7105 ones:
 //                                flysky afhds2a hubsan bugs height pelikan
 //                                kyosho kyoshohype wfly2 joysway, CYRF6936: dsm (data
 //                                packets), dsmbind (bind packets: SDR), devo
@@ -778,6 +778,11 @@ static const preset_t _presets[] = {
     {"ikea", 249939, 80000, 89, true, 2432999908, 199951, 4, CC_CRC | CC_VAR | CC_FEC | CC_MSK},
     // Futaba SFHSS: 128 kbps 2-FSK, 38 kHz deviation, fixed length, CC2400 CRC
     {"sfhss", 128143, 38000, 86, true, 2399999634, 249939, 4, CC_CRC2400},  // 220 kHz
+    // Futaba T-FHSS (R334SBS firmware): 384 kbps MSK (1/8 phase step, as
+    // Redpine), sync D391 16/16, 14 bytes fixed, no CC2500 CRC (CRC-16/MCRF4XX
+    // in the payload). ch = CHANNR = 5 (n - 1), n = 1..31: 2407.5 + 2 (n - 1) MHz.
+    // RX filter: code 91 receives nothing at 384 kbps, 92 and up do
+    {"tfhss", 384033, 123000, 93, true, 2407499786, 399902, 2, CC_MSK},
     // A7105 (DATA_RATE 0x0E: 500 kbps / (n + 1), TX_II 0x2B), ch = PLL_I.
     // Deviation: the A7105 receives best at 250 kHz (186 kHz: 2.4% CRC errors
     // without FEC, 250 kHz: 0.6%, 140 / 300 kHz: worse).
@@ -1564,17 +1569,188 @@ static void _cmd_fasst(char* args)
   cfg.sweep = _number_or(&args, 2);
   cfg.step = _number_or(&args, FASST_HOP_STEP);
   cfg.id = _number_or(&args, FASST_ID_DEFAULT);
+  cfg.ch7 = _number_or(&args, 0);
   if (cfg.secs == 0 || cfg.secs > 600 || cfg.deviation > 511750 || cfg.chip_rate < 1000000 ||
-      cfg.chip_rate > 2000000 || (cfg.fs_every && cfg.fs_every < 6) || cfg.step == 0 ||
-      cfg.step > 36) {
-    _print("@err usage: fasst [secs] [invert] [chip_rate] [dev_hz] [fs_every] [sweep] [step] [id]\r\n");
+      cfg.chip_rate > 2000000 || (cfg.fs_every && cfg.fs_every < (cfg.ch7 ? 2 : 6)) || cfg.step == 0 ||
+      (cfg.step > 36 && (cfg.step <= FASST_FRANCE_STEP || cfg.step > FASST_FRANCE_STEP + FASST_FRANCE_HOPS))) {
+    _print("@err usage: fasst [secs] [invert] [chip_rate] [dev_hz] [fs_every] [sweep] [step] [id] [7ch]\r\n");
     return;
   }
   _job_stop();
-  _printf("@ok fasst secs=%lu invert=%u rate=%lu dev=%lu fs_every=%lu sweep=%u step=%u id=%08lx\r\n",
+  _printf("@ok fasst secs=%lu invert=%u rate=%lu dev=%lu fs_every=%lu sweep=%u step=%u id=%08lx "
+          "7ch=%u\r\n",
           cfg.secs, cfg.invert, cfg.chip_rate, cfg.deviation, cfg.fs_every, cfg.sweep, cfg.step,
-          cfg.id);
+          cfg.id, cfg.ch7);
   fasst_run(&cfg, _printf);
+  if (_phy_ok && !_apply_phy()) _report_radio_error("radio init");
+}
+
+// FASSTest 14CH TX experiment (bench_fasst.c), blocking
+static void _cmd_fasstest(char* args)
+{
+  fasstest_cfg_t cfg = {.tx_power = _tx_power};
+  cfg.secs = _number_or(&args, 10);
+  cfg.row = _number_or(&args, 0);
+  cfg.sweep = _number_or(&args, 2);
+  uint32_t id = _number_or(&args, 0x088AAFFB), id45 = _number_or(&args, 0);  // the T14SG's
+  cfg.link_secs = _number_or(&args, 0);
+  cfg.pages = _number_or(&args, 0);
+  uint32_t rx = _number_or(&args, 0x08A18240);  // the lent R7008SB's serial
+  for (int i = 0; i < 4; i++) cfg.rx[i] = rx >> (24 - 8 * i);
+  for (int i = 0; i < 4; i++) cfg.id[i] = id >> (24 - 8 * i);
+  cfg.id[4] = id45 >> 8;
+  cfg.id[5] = id45;
+  // The receiver keeps ID0..3 as 9 decimal digits (fasst_frame.h)
+  if (cfg.secs == 0 || cfg.secs > 600 || cfg.row > 45 || cfg.link_secs > 600 || id == 0 ||
+      id > 999999999 || cfg.pages >> FASSTEST_PAGES) {
+    _print("@err usage: fasstest [secs] [row] [sweep] [id0..3] [id4..5] [link_secs] [pages] "
+           "[rx]\r\n");
+    return;
+  }
+  _job_stop();
+  _printf("@ok fasstest secs=%lu row=%u code=%u sweep=%u id=%08lx%04lx link=%lu pages=0x%x "
+          "rx=%08lx\r\n",
+          cfg.secs, cfg.row, fasstest_code(cfg.row >= 23, cfg.row % 23), cfg.sweep, id,
+          id45 & 0xFFFF, cfg.link_secs, cfg.pages, rx);
+  fasstest_run(&cfg, _printf);
+  if (_phy_ok && !_apply_phy()) _report_radio_error("radio init");
+}
+
+// A newline from the host ends a blocking run (the byte taken)
+static bool _host_stop() { return uart_rx_fifo_available(UART0) && uart_get_char(UART0) == '\n'; }
+
+// Futaba S-FHSS TX, blocking (preset sfhss, then back to it): per 6.8 ms
+// hop on channel n (CHANNR 6 n + 16) two 13-byte packets 1.6 ms apart,
+// the next n = n + code + 2 mod 31 skipping 30. mode 0 as the T14SG
+// (ch1..4 command 00, ch5..8 09), 1 as the MPM's Futaba_cc2500.ino (the
+// halves' order alternating per hop, bit 1 set). Values in us (1520
+// centre, grow down): ch1 swept 1100..1940, ch2 1100, ch3 1940, others
+// 1520. With fs_ms: every fs_ms one hop of F/S packets (command bit 2)
+// carrying the raw 12-bit words w1..w8 (default the T14SG's)
+static void _sfhss_packet(uint8_t* p, uint16_t id, uint16_t b34, uint8_t n, uint8_t code,
+                          const uint16_t* ch, uint8_t cmd)
+{
+  p[0] = 0x81;
+  p[1] = id >> 8;
+  p[2] = id;
+  p[3] = b34 >> 8;
+  p[4] = b34;
+  p[5] = n << 3 | (ch[0] >> 9 & 7);
+  p[6] = ch[0] >> 1;
+  p[7] = ch[0] << 7 | (ch[1] >> 5 & 0x7F);
+  p[8] = ch[1] << 3 | (ch[2] >> 9 & 7);
+  p[9] = ch[2] >> 1;
+  p[10] = ch[2] << 7 | (ch[3] >> 5 & 0x7F);
+  p[11] = ch[3] << 3 | (code >> 2 & 7);
+  p[12] = code << 6 | cmd;
+}
+
+static void _cmd_sfhss(char* args)
+{
+  static const uint16_t fs_t14sg[8] = {0x950, 0x8DF, 0x800, 0xB5A, 0x800, 0x8CE, 0x800, 0x803};
+  uint32_t secs = _number_or(&args, 30), mode = _number_or(&args, 0);
+  uint32_t id = _number_or(&args, 0xFBAF), code = _number_or(&args, 13);
+  uint32_t b34 = _number_or(&args, 0x8A08), fs_ms = _number_or(&args, 0);
+  uint16_t fs[8];
+  for (int i = 0; i < 8; i++) fs[i] = _number_or(&args, fs_t14sg[i]) & 0xFFF;
+  if (secs == 0 || secs > 600 || mode > 1 || id > 0xFFFF || code > 31 || b34 > 0xFFFF ||
+      (fs_ms && fs_ms < 100)) {
+    _print("@err usage: sfhss [secs] [mode] [id] [code] [b34] [fs_ms] [w1..w8]\r\n");
+    return;
+  }
+  if (!_load_preset("sfhss")) return;
+  _printf("@ok sfhss secs=%lu mode=%lu id=%04lx code=%lu b34=%04lx fs_ms=%lu fs=", secs, mode, id,
+          code, b34, fs_ms);
+  for (int i = 0; i < 8; i++) _printf("%03x%s", fs[i], i < 7 ? " " : "\r\n");
+
+  uint16_t ch[8] = {1520, 1100, 1940, 1520, 1520, 1520, 1520, 1520};
+  int sweep = 4;
+  // One buffer per packet: the RF core reads it when the packet starts
+  uint8_t pkt[13], air[2][RADIO_MAX_PKT_LEN];
+  uint8_t n = 0;
+  uint32_t hops = secs * 1000000 / 6800, late = 0, errors = 0, fs_hops = 0, counter = 0;
+  uint32_t t = micros() + 2000, fs_next = t;
+  uint32_t h = 0;
+  for (; h < hops && !_host_stop(); h++) {
+    if (radio_set_frequency_start(_ch_khz(6 * n + 16) + _trim_khz) != RADIO_OK) errors++;
+    if (ch[0] + sweep > 1940 || ch[0] + sweep < 1100) sweep = -sweep;
+    ch[0] += sweep;
+    bool fs_hop = fs_ms && (int32_t)(t - fs_next) >= 0;
+    if (fs_hop) {
+      fs_next = t + fs_ms * 1000;
+      fs_hops++;
+    }
+    for (int k = 0; k < 2; k++) {
+      // The half: T14SG ch1..4 then ch5..8; MPM counter & 1 (+1 per DATA2)
+      counter += mode == 1 && k == 1;
+      uint8_t half = mode == 1 ? counter & 1 : k;
+      uint8_t cmd = k | half << 3 | (fs_hop ? 0x04 : mode == 1 ? 0x02 : 0);
+      _sfhss_packet(pkt, id, b34, n, code, (fs_hop ? fs : ch) + 4 * half, cmd);
+      uint16_t len = frame_tx_data(&_frame, pkt, sizeof(pkt), air[k]);
+      if (!micros_before(t - 200)) late++;
+      if (!len || radio_tx_start_at(air[k], len, t + 1600 * k) != RADIO_OK) errors++;
+    }
+    t += 6800;
+    n += code + 2;
+    if (n > 29) {
+      if (n < 31) n += code + 2;
+      n -= 31;
+    }
+  }
+  if (radio_tx_wait() != RADIO_OK) errors++;
+  _printf("@ok sfhss hops=%lu late=%lu errors=%lu fs_hops=%lu\r\n", h, late, errors, fs_hops);
+  if (!_apply_phy()) _report_radio_error("radio init");
+}
+
+// FASST RX (bench_fasst.c), blocking
+static void _cmd_fasstrx(char* args)
+{
+  fasst_rx_cfg_t cfg;
+  cfg.secs = _number_or(&args, 10);
+  cfg.k = _number_or(&args, 0);
+  cfg.bytes = _number_or(&args, FASST_PACKET_LEN + 1);
+  cfg.rx_bw = _number_or(&args, 100);
+  cfg.sync_threshold = _number_or(&args, 0);
+  cfg.follow = _number_or(&args, 1);
+  uint32_t fasstest = _number_or(&args, 0);
+  cfg.fasstest = fasstest != 0;
+  cfg.chips = fasstest == 2 ? FASST_BARKER_7 : FASST_BARKER_11;
+  cfg.stop = _host_stop;
+  if (cfg.secs > 3600 || cfg.k >= (cfg.fasstest ? FASSTEST_CHANNELS : FASST_HOPS) || cfg.bytes == 0 ||
+      cfg.bytes > FASST_RX_BYTES_MAX || cfg.rx_bw < 64 || cfg.rx_bw > 103 || cfg.sync_threshold > 0x7F || fasstest > 2) {
+    _print("@err usage: fasstrx [secs] [k] [bytes] [rx_bw] [syncthr] [follow] [fasstest]\r\n");
+    return;
+  }
+  _job_stop();
+  _printf("@ok fasstrx secs=%lu k=%u bytes=%u rx_bw=%u syncthr=0x%02x follow=%u fasstest=%lu "
+          "chips=%u sync=%08lx\r\n",
+          cfg.secs, cfg.k, cfg.bytes, cfg.rx_bw, cfg.sync_threshold, cfg.follow, fasstest, cfg.chips,
+          fasst_rx_sync_word(cfg.chips));
+  fasst_rx_run(&cfg, _printf);
+  if (_phy_ok && !_apply_phy()) _report_radio_error("radio init");
+}
+
+// FASSTest receiver emulator (bench_fasst.c), blocking
+static void _cmd_ftrx(char* args)
+{
+  fasstest_em_cfg_t cfg = {.tx_power = _tx_power, .stop = _host_stop};
+  cfg.secs = _number_or(&args, 0);
+  uint32_t rx = _number_or(&args, 0x08A18240);  // the lent R7008SB's serial
+  uint32_t id = _number_or(&args, 0), id45 = _number_or(&args, 0);
+  cfg.ch12 = _number_or(&args, 0);
+  cfg.park = _number_or(&args, FASSTEST_LINK_CHANNEL(0));
+  for (int i = 0; i < 4; i++) cfg.rx[i] = rx >> (24 - 8 * i);
+  for (int i = 0; i < 4; i++) cfg.id[i] = id >> (24 - 8 * i);
+  cfg.id[4] = id45 >> 8;
+  cfg.id[5] = id45;
+  if (cfg.secs > 3600 || cfg.park >= FASSTEST_CHANNELS) {
+    _print("@err usage: ftrx [secs] [rx] [id0..3] [id4..5] [ch12] [park]\r\n");
+    return;
+  }
+  _job_stop();
+  _printf("@ok ftrx secs=%lu rx=%08lx id=%08lx%04lx ch12=%u park=%u\r\n", cfg.secs, rx, id,
+          id45 & 0xFFFF, cfg.ch12, cfg.park);
+  fasstest_em_run(&cfg, _printf);
   if (_phy_ok && !_apply_phy()) _report_radio_error("radio init");
 }
 
@@ -1873,6 +2049,10 @@ static void _process_line(char* line)
   else if (!strcmp(cmd, "timing")) _cmd_timing(args);
   else if (!strcmp(cmd, "sched")) _cmd_sched(args);
   else if (!strcmp(cmd, "fasst")) _cmd_fasst(args);
+  else if (!strcmp(cmd, "sfhss")) _cmd_sfhss(args);
+  else if (!strcmp(cmd, "fasstrx")) _cmd_fasstrx(args);
+  else if (!strcmp(cmd, "fasstest")) _cmd_fasstest(args);
+  else if (!strcmp(cmd, "ftrx")) _cmd_ftrx(args);
   else _printf("@err unknown command %s\r\n", cmd);
 }
 
