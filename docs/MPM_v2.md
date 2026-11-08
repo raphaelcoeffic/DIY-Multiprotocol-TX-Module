@@ -34,6 +34,15 @@ branch cc27xx): `-DCC27_OPENOCD="<openocd> -s <its tcl dir>"` when not
 installed. `-DCC27_MODULE_ID=0x...` gives it another module's ID (the
 receivers bound to that module).
 
+The XJT-Lite's `firmware.bin` goes at 0x8000, behind FrSky's boot loader
+(kept), over cJTAG with a J-Link: an OpenOCD with J-Link cJTAG support
+([raphaelcoeffic/openocd](https://github.com/raphaelcoeffic/openocd), branch
+jlink-cjtag), `-DXJT_OPENOCD=<openocd>` when not installed. Only with a boot
+loader of your own in place of FrSky's: `XJT_APP_START` (a 4 KB sector,
+0x8000 by default) links the image for the address that boot loader starts
+it at. FrSky's boot loader only starts 0x8000: an image linked for another
+address doesn't run behind it.
+
 ## Flashing
 
 `--target flash`, with `-DMULTI_FLASH_METHOD=...`:
