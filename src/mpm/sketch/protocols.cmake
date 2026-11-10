@@ -34,5 +34,7 @@ function(target_mpm_protocols target)
         VERBATIM
     )
     target_sources(${target} PRIVATE ${cpp})
+    # mpm_config.h: the protocols without C copies in mpm-v2
+    target_compile_definitions(${target} PRIVATE MPM_SKETCH)
     target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR} ${MULTI_SKETCH_DIR})
 endfunction()
