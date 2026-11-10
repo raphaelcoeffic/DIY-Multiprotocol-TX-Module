@@ -24,13 +24,17 @@
 
 // SYSTIM: 0.25 us ticks
 #define US(x) ((x) * 4U)
-// Start of an operation: some margin for the PBE to be ready (TI: 50 us)
-#define START_DELAY US(100)
-// The same with the radio on and tuned (rf_fs_start()): the PBE takes the
-// op at once
-#define START_DELAY_TUNED US(30)
+// Start of an operation: SYSTIM0 a little after the op is posted. A compare
+// in the past fires at once; the cold start still takes it, the TX on a
+// tuned synthesizer (rf_fs_start()) misses it (0: PA ~1 ms late, 1 us OK).
+// Measured (Saleae, FrSky X): call to PA ~80 us, ~24 us tuned; TI's 50 us
+// margin (we had 100) is for their scheduler.
+#define START_DELAY US(5)
+#define START_DELAY_TUNED US(5)
 // Hard stop: the PBE ends the operation within (measured: some us)
 #define STOP_TIMEOUT US(1000)
+// rf_rx(): a packet under way at the end of the window, at most this longer
+#define RX_END_MAX US(20000)
 
 #define BUFRAM(reg) (LRFD_BUFRAM_BASE + PBE_GENERIC_RAM_O_##reg)
 
@@ -42,6 +46,7 @@ static rf_modem_t _modem_tx, _modem_rx;
 static uint32_t _events;
 static bool _running;
 static uint32_t _rx_fifo_size;
+static uint16_t _sync_thr;  // the PHY's DEMC1BE1 (32 bit sync words)
 // OP_FS: the synthesizer tuned ahead for a TX at _fs_freq (rf_fs_start()),
 // kept on once locked (OPDONE)
 static bool _fs_on;
@@ -200,6 +205,7 @@ int rf_configure(const LRF_Config *config)
   }
   _state = RadioState_Configured;
   _config = config;
+  _sync_thr = HWREG_READ_LRF(LRFDMDM_BASE + LRFDMDM_O_DEMC1BE1);
   _modem_tx = _modem_rx = (rf_modem_t){0};
   _raw_framing();
   return 0;
@@ -220,19 +226,39 @@ static void _modem(const rf_modem_t *m)
   if (m->baudpre) HWREG_WRITE_LRF(LRFDMDM_BASE + LRFDMDM_O_BAUDPRE) = m->baudpre;
 }
 
+static inline uint32_t _rbit(uint32_t v)
+{
+  __asm__("rbit %0, %1" : "=r"(v) : "r"(v));
+  return v;
+}
+
+// The modem's sync word, bits first sent at the top (TX and the correlator,
+// below 32 bits too: measured), bit reversed for HDRORDER (MSB first). Not
+// LRF_Interface_Generic_programSyncWord*(): they right-align it, and their
+// bit reversal (PBE PHAOUT0BR) left stale words while the radio was idle
+static uint32_t _sync_word(uint32_t sync, uint8_t bits)
+{
+  if (HWREGH_READ_LRF(LRFD_BUFRAM_BASE + PBE_GENERIC_RAM_O_PKTCFG) & PBE_GENERIC_RAM_PKTCFG_HDRORDER_M)
+    return _rbit(sync);
+  return bits < 32 ? sync << (32 - bits) : sync;
+}
+
 void rf_set_syncs(uint32_t sync_a, uint32_t sync_b, uint8_t bits)
 {
-  // REFLEN: sync length - 1; LRF right-aligns the word to it (and reverses
-  // it for HDRORDER)
+  // REFLEN: sync length - 1
   uint32_t demswqu0 = HWREG_READ_LRF(LRFDMDM_BASE + LRFDMDM_O_DEMSWQU0);
   demswqu0 = (demswqu0 & ~LRFDMDM_DEMSWQU0_REFLEN_M) |
              (((uint32_t)(bits - 1) << LRFDMDM_DEMSWQU0_REFLEN_S) & LRFDMDM_DEMSWQU0_REFLEN_M);
   HWREG_WRITE_LRF(LRFDMDM_BASE + LRFDMDM_O_DEMSWQU0) = demswqu0;
+  // Correlation thresholds A and B: the PHY's are for 32 bits (0x2C), out of
+  // reach for 16 (raw d391: 0%; 0x16 99%, 0x12 100%), scaled to the length
+  uint32_t thr = (_sync_thr & 0xFF) * bits / 32;
+  HWREG_WRITE_LRF(LRFDMDM_BASE + LRFDMDM_O_DEMC1BE1) = thr << 8 | thr;
   // TX sends A. B: with B not programmed the MCE never starts its
   // demodulator (MDM ENABLE stays TOPSM|FIFO, the RFE never acks the RX
   // start); NESB searches both (PRX: two pipes)
-  LRF_Interface_Generic_programSyncWordA(sync_a);
-  LRF_Interface_Generic_programSyncWordB(sync_b);
+  HWREG_WRITE_LRF(LRFDPBE32_BASE + LRFDPBE32_O_MDMSYNCA) = _sync_word(sync_a, bits);
+  HWREG_WRITE_LRF(LRFDPBE32_BASE + LRFDPBE32_O_MDMSYNCB) = _sync_word(sync_b, bits);
 }
 
 void rf_set_sync(uint32_t sync, uint8_t bits) { rf_set_syncs(sync, sync, bits); }
@@ -280,7 +306,8 @@ static void _end(void)
   _cancel_systim0();
   _clear_events(0xFFFFFFFFU);
   LRF_disable();
-  LRF_disableSynthRefsys();
+  // The synthesizer's reference stays on: enabling it costs 30 us
+  // (LRF_REFSYS_ENABLE_TIME) on each op start
   _running = false;
 }
 
@@ -535,9 +562,17 @@ int rf_rx(uint32_t freq_hz, uint16_t len, uint32_t timeout_us, rf_packet_t *pkt)
   int res = rf_rx_start(freq_hz, len < 2 ? 2 : len, false, 0);
   if (res) return res;
   uint32_t start = _now();
+  uint32_t wp = HWREG_READ_LRF(LRFDPBE_BASE + LRFDPBE_O_RXFWP);
 
-  // The PBE takes SYSTIM0 as the start; the stop is ours (hard stop)
+  // The PBE takes SYSTIM0 as the start; the stop is ours (hard stop). A
+  // packet under way at the end (the PBE writes the FIFO from the sync word
+  // on) is received to its end, as the CC2652's RX: an ESB ack with its
+  // payload may end after the window (250 kbps, 4 bytes: 550 us after the TX
+  // for CFlie's 500 us)
   while (rf_busy() && (int32_t)(_now() - start - START_DELAY - US(timeout_us)) < 0) {
+  }
+  while (rf_busy() && HWREG_READ_LRF(LRFDPBE_BASE + LRFDPBE_O_RXFWP) != wp &&
+         (int32_t)(_now() - start - START_DELAY - US(timeout_us) - RX_END_MAX) < 0) {
   }
   pkt->len = 0;
   if (rf_rx_read(pkt)) {
