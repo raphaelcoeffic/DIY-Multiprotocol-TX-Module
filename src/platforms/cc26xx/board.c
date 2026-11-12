@@ -1,0 +1,46 @@
+// board_init() on the CC26xx (CC2650, CC2652): the 48 MHz oscillator, power
+// domains, GPIO, then the board's pins (board_pins_init(), the board's
+// board.c)
+#include <driverlib/gpio.h>
+#include <driverlib/osc.h>
+#include <driverlib/prcm.h>
+#include "board.h"
+#include "cc26xx_compat.h"
+
+#define POWER_DOMAINS (PRCM_DOMAIN_PERIPH | PRCM_DOMAIN_SERIAL)
+
+void board_init()
+{
+  CPUcpsid();
+
+  // Off first: whatever a boot loader left in them (a UART left on keeps
+  // its format whatever we write, SSI FIFO words, timers, DMA) back to its
+  // reset state. GPIO too: its pins float until board_pins_init()
+  PRCMPowerDomainOff(POWER_DOMAINS);
+  while (PRCMPowerDomainsAllOff(PRCM_DOMAIN_PERIPH) != PRCM_DOMAIN_POWER_OFF) {
+  }
+  while (PRCMPowerDomainsAllOff(PRCM_DOMAIN_SERIAL) != PRCM_DOMAIN_POWER_OFF) {
+  }
+
+  // XOSC_HF (48 MHz xtal or HPOSC) for the RF core
+  OSCHF_TurnOnXosc();
+  while (!OSCHF_AttemptToSwitchToXosc()) {
+  }
+
+  // Power ON periph and serial
+  PRCMPowerDomainOn(POWER_DOMAINS);
+  while (PRCMPowerDomainsAllOn(POWER_DOMAINS) != PRCM_DOMAIN_POWER_ON) {
+  }
+
+  PRCMPeripheralRunEnable(PRCM_PERIPH_GPIO);
+  PRCMLoadSet();
+  while (!PRCMLoadGet()) {
+  }
+
+  board_pins_init();
+
+  // Enable interrupts
+  CPUcpsie();
+}
+
+
