@@ -1343,8 +1343,11 @@ void Bench_loop()
 		TIMER2_BASE->SR = 0x1E5F & ~TIMER_SR_CC1IF;	// Clear Timer2/Comp1 interrupt flag
 		uint16_t diff = OCR1A - TCNT1;
 		sei();
-		if((diff & 0x8000) && !(next_callback & 0x8000))
-			continue;						// Late: call the job again right away
+		// Late: call the job again right away. Also when the timer is at the compare value: the
+		// match may have come just before the flag was cleared, the wait would last a whole timer
+		// wrap (32.8 ms, once a second with 100 us callbacks)
+		if(((diff & 0x8000) || diff < 4) && !(next_callback & 0x8000))
+			continue;
 		if(millis() - last_poll >= BENCH_USB_POLL)
 		{ // Commands must not starve when the job uses short callbacks
 			bench_poll();
