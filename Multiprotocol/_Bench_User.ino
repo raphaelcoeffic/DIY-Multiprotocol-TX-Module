@@ -42,9 +42,6 @@
  (sensor type 3, group 0) on the next channel 7 ms after each frame. TX ID 123456789, x 5A,
  receiver ID 999999998.
 */
-static const uint8_t air_row0[31] = {31, 1, 3, 9, 27, 19, 26, 16, 17, 20, 29, 25, 13, 8, 24, 10,
-									 30, 28, 22, 4, 12, 5, 15, 14, 11, 2, 6, 18, 23, 7, 21};
-static const uint8_t air_list[16] = {1, 25, 3, 22, 4, 21, 6, 19, 7, 18, 9, 16, 10, 15, 12, 13};
 static const uint8_t air_tx_id[4] = {0x07, 0x5B, 0xCD, 0x15};	// I0..I3: 123456789
 static const uint8_t air_rx_id[4] = {0x3B, 0x9A, 0xC9, 0xFE};	// 999999998
 #define AIR_X			0x5A
@@ -58,8 +55,7 @@ static uint16_t air_ch1;
 
 static uint8_t air_channel(uint8_t i)
 {
-	if(air_row == 0xFF) return air_list[i % 16];
-	return (air_row0[i % 31] + air_row - 1) % 31 + 1;
+	return tfhss_channel(air_row, i);	// _Bench.ino
 }
 
 // len bytes on air: len - 2 XOR the key 00 ID3 ID2 ID1 ID0 x n ID3... (byte 17: 00), then the
