@@ -26,6 +26,14 @@ typedef struct {
   // under the same packet commands: symbol_rate, deviation, rx_bw,
   // preamble_bytes, if_freq and fsk are ignored
   bool ble_2m;
+  // IEEE 802.15.4 2.4 GHz (O-QPSK, 250 kbps; RADIO_IEEE platforms): only
+  // tx_power counts. Packets are PSDUs without the FCS: radio_tx_start*()
+  // sends one with its PHR and FCS added, radio_rx_start() receives whole
+  // frames of any length (its len ignored) and drops those with a bad FCS
+  // (radio_rx_stats() nok), radio_receive() gives their PSDU without the FCS,
+  // timestamp_us the SFD. Sync words, variable length RX and radio_send_rx()
+  // don't apply
+  bool ieee;
 } radio_phy_t;
 
 typedef struct {
@@ -137,6 +145,18 @@ radio_status_t radio_set_tx_power(uint16_t tx_power);
 // Instant RSSI in dBm while RX runs, RADIO_RSSI_NONE if not (yet) valid
 #define RADIO_RSSI_NONE (-128)
 int8_t radio_rssi();
+
+// IEEE 802.15.4 RX (radio_phy_t ieee): clear channel assessment now, as
+// RADIO_CCA_* flags: energy (the RSSI at or above rssi_dbm), an O-QPSK
+// signal (the RF core's correlator: 3 or more correlation peaks in 8
+// symbols), a frame being received (its SFD found). 0: clear;
+// RADIO_CCA_INVALID while the RSSI isn't valid yet, or without IEEE RX. A
+// reading only: no backoff, nothing sent
+#define RADIO_CCA_ENERGY 0x01
+#define RADIO_CCA_SIGNAL 0x02
+#define RADIO_CCA_FRAME 0x04
+#define RADIO_CCA_INVALID 0x80
+uint8_t radio_cca(int8_t rssi_dbm);
 
 // RF core receive counters of the current/last RX command
 typedef struct {

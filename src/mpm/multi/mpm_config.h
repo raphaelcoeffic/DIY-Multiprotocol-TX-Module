@@ -60,6 +60,8 @@
 
 // Futaba FASST 10ch, on the radio directly (proto_fasst.c, core/fasst_frame.c)
 #define FASST_INO
+// Jeti Duplex 2.4 GHz, on the radio directly (proto_jeti.c, core/jeti_frame.c)
+#define JETI_INO
 
 #define BAYANG_HUB_TELEMETRY
 #define BAYANG_RX_NRF24L01_INO
@@ -73,6 +75,7 @@
 #define FRSKYV_CC2500_INO
 #define FRSKYX_CC2500_INO
 #define FUTABA_CC2500_INO
+#define FUTABA_FW_TELEMETRY
 // FrSky RX, its clone subtype: the TX ID and hop table of FrSky D / X / X2
 // for their "Cloned" subtypes
 #define FRSKY_RX_CC2500_INO

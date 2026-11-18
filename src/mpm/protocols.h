@@ -15,6 +15,13 @@ void FASST_init();
 uint16_t FASST_callback();
 #endif
 
+// Jeti Duplex 2.4 GHz (proto_jeti.c): mpm-v2's own, as FASST
+#ifdef JETI_INO
+#define PROTO_JETI 111
+void JETI_init();
+uint16_t JETI_callback();
+#endif
+
 // The MULTI-Module protocols (mpm_config.h)
 void end_bind_counter();
 
@@ -43,8 +50,8 @@ void PROPEL_init();
 uint16_t PROPEL_callback();
 #endif
 #ifdef FUTABA_CC2500_INO
-void SFHSS_init();
-uint16_t SFHSS_callback();
+void FUTABA_init();
+uint16_t FUTABA_callback();
 #endif
 #ifdef DSM_CYRF6936_INO
 void DSM_init();

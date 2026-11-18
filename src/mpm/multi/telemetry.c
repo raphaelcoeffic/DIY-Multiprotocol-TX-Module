@@ -167,6 +167,16 @@ static void multi_send_header(uint8_t type, uint8_t len)
 	}
 #endif
 
+#ifdef FUTABA_FW_TELEMETRY
+	uint8_t futaba_telem[3 + 16], futaba_telem_len;	// Multiprotocol.ino's
+	void FUTABA_frame()
+	{
+		multi_send_header(MULTI_TELEMETRY_FUTABA, futaba_telem_len);
+		for (uint8_t i = 0; i < futaba_telem_len; i++)	// first slot, RSSI, LQ, S.BUS2 slots (TFHSS_cc2500)
+			Serial_write(futaba_telem[i]);
+	}
+#endif
+
 static void multi_send_frskyhub()
 {
 	multi_send_header(MULTI_TELEMETRY_HUB, 9);
@@ -801,6 +811,14 @@ void TelemetryUpdate()
 			if(telemetry_link == 2 && protocol == PROTO_RLINK)
 			{
 				RLINK_raw_frame();
+				telemetry_link=0;
+				return;
+			}
+		#endif
+		#if defined FUTABA_FW_TELEMETRY
+			if(telemetry_link == 2 && protocol == PROTO_FUTABA)
+			{
+				FUTABA_frame();
 				telemetry_link=0;
 				return;
 			}

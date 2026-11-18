@@ -38,7 +38,7 @@ function(add_application name)
 endfunction()
 
 # Radio bench (docs/bench.md)
-add_application(bench core/main_bench.c core/bench.c core/bench_fasst.c core/fasst_frame.c
+add_application(bench core/main_bench.c core/bench.c core/bench_fasst.c core/bench_jeti.c core/jeti_frame.c core/fasst_frame.c
     core/frame.c core/tfhss.c drivers/sx1281.c core/syscalls.c ${board_dir}/bench_port.c)
 
 # The MPM port: the radio's link on UART0 through the CP2102N (100000 8E2,
@@ -46,7 +46,7 @@ add_application(bench core/main_bench.c core/bench.c core/bench_fasst.c core/fas
 # the EEPROM in RAM (eeprom_ram.c) and the host's file "eeprom"
 # (file_server_ram.c)
 add_application(firmware core/main_mpm.c ${board_dir}/mpm_port.c core/eeprom_ram.c
-    core/file_server_ram.c core/fasst_frame.c core/frame.c core/log.c core/syscalls.c
+    core/file_server_ram.c core/fasst_frame.c core/jeti_frame.c core/frame.c core/log.c core/syscalls.c
     ${mpm_sources} ${mpm_chip_sources})
 target_mpm(firmware_elf)
 
@@ -65,7 +65,10 @@ if (EXISTS ${CMAKE_SOURCE_DIR}/tools/sniffer_web/index.html)
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/tools/sniffer_web/index.html ${web_dir}/
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/zbdongle-p-bench.bin
                 ${web_dir}/fasst-sniffer-zbdongle-p.bin
-        DEPENDS bench
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/tools/sniffer_web/radio.html ${web_dir}/
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/zbdongle-p-firmware.bin
+                ${web_dir}/futaba-radio-zbdongle-p.bin
+        DEPENDS bench firmware
         VERBATIM
     )
 endif()

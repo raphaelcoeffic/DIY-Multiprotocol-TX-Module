@@ -56,13 +56,36 @@ uint8_t mpm_frame_encode(const mpm_frame_t* f, uint8_t* buf);
 #define MPM_TELEM_HDR_LEN 4
 #define MPM_TELEM_STATUS 0x01
 #define MPM_TELEM_PROTO_LIST 0x11
-// Futaba FASSTest receiver replies (proto_fasst.c): mpm-v2's own, not
-// assigned upstream (the last there: RLink, 18). Byte 0: the page (0..3; 12CH:
-// 0x80), byte 1: the reply's RSSI at the module (dBm, signed), then the
-// reply's data: 18CH 16 bytes, S.BUS2 slots 8 page .. 8 page + 7, 2 bytes
-// each as the sensor sent them (slot 0: the receiver's voltage, see
-// fasst_frame.h); 12CH 8 bytes (voltage, link quality %)
+// Futaba receiver telemetry, all systems (FASSTest: proto_fasst.c;
+// T-FHSS Surface and Air: TFHSS_cc2500.c): their replies carry S.BUS2 slot
+// data as the sensors put it on the wire. Not assigned upstream yet (the
+// last there: RLink, 18; this would be MULTI_TELEMETRY_FUTABA, 19).
+// Byte 0: the first slot (0..31), byte 1: the reply's RSSI at the module
+// (dBm, signed), byte 2: the link quality % the receiver reports (0xFF:
+// none in this reply), then 2 bytes per slot from the first, as the sensor
+// sent them. Slot 0 = the receiver's own: byte A bits 7..6 link bars
+// (0..3), bit 5 low voltage alarm, bit 2 the half (1: byte B is something
+// else, e.g. FASSTest's EXT voltage); byte B the receiver's voltage in 0.1 V.
+// FASSTest 18CH: 8 slots from 8 x page; 12CH: slot 0 and the link quality;
+// T-FHSS Surface: 4 slots from 4 x group, the link quality in every other
+// reply; Air: 8 slots from 8 x group
 #define MPM_TELEM_FUTABA 0x13
+// Jeti Duplex receiver replies (proto_jeti.c): mpm-v2's own. Byte 0, the
+// kind: MPM_JETI_REPLY: byte 1 the reply's RSSI at the module (dBm,
+// signed), bytes 2-7 the reply's bytes 2-7 (A: frames received, LE16; B,
+// LE16: bits 15-14 01 = the receiver's voltage in 10 mV, 00 = a counter;
+// flags: bits 1-0 antenna, bit 2 bind plug, bit 7 link new; the active
+// antenna's signal level); MPM_JETI_SCREEN: bytes 1-32 the receiver's
+// JETIBOX screen (2 lines of 16, 0 = space), while the radio's frames
+// carry the JETIBOX byte: buttons L D U R in bits 7-4 (1 = pressed), a
+// counter in bits 3-0 (a new value: one press); MPM_JETI_EX: from byte 1
+// one message of a sensor on the receiver's Ext as it sent it (bit 8
+// dropped), 0x7E first: an EX packet (byte 2 0xNF, its CRC8 checked; JETI
+// Telemetry protocol 1.06) or an alarm (0x7E 0xN2 0x22|0x23 letter)
+#define MPM_TELEM_JETI 0x14
+#define MPM_JETI_REPLY 0
+#define MPM_JETI_SCREEN 1
+#define MPM_JETI_EX 2
 // MPM v2 only, on the USB link: file_server.h replies (not an MPM type)
 #define MPM_TELEM_FILE 0x40
 // MPM v2 only, on the USB link: debug log text (log.h)
