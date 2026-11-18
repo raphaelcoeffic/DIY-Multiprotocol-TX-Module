@@ -1178,6 +1178,8 @@ static bool bench_need_chip()
 static void bench_cmd_info()
 {
 	bench_printf("@ok bench=%d chip=%s job=%s ch=%u", BENCH_VERSION, bench_chip_names[bench_chip], bench_job_names[bench_job], bench_rf_ch);
+	// The sniffer page's check (mpm-v2 tools/sniffer_web): tfhssrx as mpm-v2's sniffer=3
+	bench_printf(" dev=multi sniffer=3");
 	#ifdef CC2500_INSTALLED
 		bench_printf(" cc2500=%d", bench_chip_reset(BENCH_CC2500));
 	#endif
