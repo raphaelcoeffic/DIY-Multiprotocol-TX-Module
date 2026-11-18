@@ -60,6 +60,9 @@
                                 (pkt: packet_in[0..16] received since the last "telem", DSM: RSSI + packet)
    cyrfid [hex]                 CYRF6936 MFG ID used by DSM (6 bytes, RAM only), none: the chip's -> @ok cyrfid=<hex>
    user [hex]                   run Bench_user_init(hex)/Bench_user_callback() from _Bench_User.ino
+   tfhssrx [secs] [n] [follow] [air]  Futaba T-FHSS (air=1: T-FHSS Air) sniffer following the hops,
+                                as the mpm-v2 bench (CC2500 set up by it) -> @rx / @lock / @period lines,
+                                @end tfhssrx ... after secs (0: none), an empty line or "stop"
 
  Host tool, build script, examples, interoperability tests and results:
  https://github.com/raphaelcoeffic/mpmv2, docs/bench.md
@@ -104,10 +107,11 @@ enum BENCH_JOB {
 	BENCH_RX	= 2,
 	BENCH_PROTO	= 3,
 	BENCH_USER	= 4,
+	BENCH_TFHSS	= 5,
 };
 
 const char * const bench_chip_names[] = { "none", "cc2500", "nrf", "a7105", "xn297", "cyrf" };
-const char * const bench_job_names[] = { "idle", "tx", "rx", "proto", "user" };
+const char * const bench_job_names[] = { "idle", "tx", "rx", "proto", "user", "tfhss" };
 
 uint8_t bench_chip = BENCH_NONE;
 uint8_t bench_job = BENCH_IDLE;
@@ -820,9 +824,326 @@ static uint16_t bench_rx_callback()
 	return BENCH_RX_POLL;
 }
 
+//*************************
+//***  T-FHSS follower  ***
+//*************************
+// tfhssrx [secs] [n] [follow] [air]: Futaba T-FHSS (Surface) / T-FHSS Air sniffer following the
+// hops on the CC2500, the same command and lines as the mpm-v2 bench (src/core/bench.c, tfhss.h,
+// docs/bench.md): "@ok tfhssrx ...", "@rx <us> <ch> <hex> rssi=<dBm> foff=<kHz>", "@lock ...",
+// "@period ...", "@end tfhssrx ..." after secs (0: none), an empty line or "stop". ch = CHANNR =
+// 5 (n - 1). The CC2500 gets the R334SBS (Surface) or T18SZ (Air) registers, FOCCFG 1E (+-BW/4),
+// FSCAL1 per channel calibrated at the start. Air follows the TX's frequency once locked: a
+// quarter of the FREQEST of each of its packets added to FSCTRL0 (a module's crystal may be 50 kHz
+// off, the edge of FOCCFG's +-58 kHz there; foff= is the total). Times: when the packet was read (its end + up to TFHSS_POLL_US), not the
+// sync word as on mpm-v2.
+#define TFHSS_CHANNELS			31
+#define TFHSS_ROW_LIST			0xFF
+#define TFHSS_TYPE_REPLY		16
+#define TFHSS_AIR_ROW_LINK		31
+#define TFHSS_WAIT_US			50000
+#define TFHSS_PERIOD_SAMPLES	4
+#define TFHSS_LATE_US			500
+#define TFHSS_AIR_LATE_US		1600
+#define TFHSS_AIR_SETTLE_US		10500
+#define TFHSS_POLL_US			100
+#define TFHSS_MAX_LEN			20
+
+// Row 0 (a Welch-Costas array), row r: (row 0 + r - 1 mod 31) + 1; the 16-channel list
+const uint8_t tfhss_row0[TFHSS_CHANNELS] = {31, 1, 3, 9, 27, 19, 26, 16, 17, 20, 29, 25, 13, 8, 24, 10,
+											30, 28, 22, 4, 12, 5, 15, 14, 11, 2, 6, 18, 23, 7, 21};
+const uint8_t tfhss_list[16] = {1, 25, 3, 22, 4, 21, 6, 19, 7, 18, 9, 16, 10, 15, 12, 13};
+
+uint8_t tfhss_channel(uint8_t row, uint8_t pos)
+{
+	if(row == TFHSS_ROW_LIST) return tfhss_list[pos % 16];
+	return (tfhss_row0[pos % TFHSS_CHANNELS] + row % TFHSS_CHANNELS - 1) % TFHSS_CHANNELS + 1;
+}
+
+static uint8_t tfhss_next(uint8_t row, uint8_t n)
+{
+	uint8_t len = row == TFHSS_ROW_LIST ? 16 : TFHSS_CHANNELS;
+	for(uint8_t i = 0; i < len; i++)
+		if(tfhss_channel(row, i) == n) return tfhss_channel(row, (i + 1) % len);
+	return tfhss_channel(row, 0);
+}
+
+static uint16_t tfhss_crc(const uint8_t *p, uint8_t n, uint16_t crc)
+{
+	while(n--)
+	{
+		crc ^= *p++;
+		for(uint8_t i = 0; i < 8; i++) crc = crc & 1 ? (crc >> 1) ^ 0x8408 : crc >> 1;
+	}
+	return crc;
+}
+
+// CRC of the data bytes XOR the CRC field (low byte first) XOR the CRC from 0 of the channel n
+// at bytes a and b: the same for all packets of one key, whatever the channel
+static uint16_t tfhss_key_syndrome(const uint8_t *p, uint8_t data, uint8_t a, uint8_t b, uint8_t n)
+{
+	uint8_t ch[TFHSS_MAX_LEN];
+	memset(ch, 0, data);
+	ch[a] = ch[b] = n;
+	return tfhss_crc(p, data, 0xFFFF) ^ (p[data] | p[data + 1] << 8) ^ tfhss_crc(ch, data, 0);
+}
+
+// A packet's sender: TX (*row, *syn = its key syndrome on channel c) or not (tfhss.h)
+static bool tfhss_tx(const uint8_t *p, bool air, bool list, uint8_t c, uint8_t *row, uint16_t *syn)
+{
+	if(!air)
+	{
+		uint8_t r = p[0] >> 5 | (p[1] & 0x0F) << 3;
+		*row = list ? TFHSS_ROW_LIST : r;
+		*syn = tfhss_key_syndrome(p, 12, 7, 7, c);
+		return (p[0] & 0x1F) < TFHSS_TYPE_REPLY && r < TFHSS_CHANNELS;
+	}
+	uint8_t r = p[0] >> 3;
+	if(r == TFHSS_AIR_ROW_LINK)
+	{ // Plain link frame on the list
+		*row = TFHSS_ROW_LIST;
+		*syn = tfhss_key_syndrome(p, 15, 0, 0, 0);
+		return *syn == 0;
+	}
+	*row = r;
+	*syn = tfhss_key_syndrome(p, 15, 6, 12, c);
+	return true;
+}
+
+static struct {
+	bool air, follow, locked, confirmed, try_list, cand;
+	int8_t trim;							// FSCTRL0
+	int16_t trim8;							// FSCTRL0 x 8
+	uint8_t len, park, c, row, hop_c, cand_row;
+	uint16_t key_syn, cand_syn;
+	uint32_t late, t_end, t_hop, t_deadline, misses, t_cand, period, period_min, samples;
+	uint32_t packets, tx, replies, missed, locks, tries, restarts;
+	uint8_t cal[TFHSS_CHANNELS + 1];
+} tf;
+
+static void tfhss_tune(uint8_t n)
+{
+	CC2500_Strobe(CC2500_SIDLE);
+	bench_rf_ch = 5 * (n - 1);
+	CC2500_WriteReg(CC2500_0A_CHANNR, bench_rf_ch);
+	CC2500_WriteReg(CC2500_25_FSCAL1, tf.cal[n]);
+	CC2500_Strobe(CC2500_SFRX);
+	CC2500_Strobe(CC2500_SRX);
+}
+
+static void tfhss_end()
+{
+	CC2500_Strobe(CC2500_SIDLE);
+	// One line in pieces: bench_printf() stops at 95 characters
+	bench_printf("@end tfhssrx packets=%lu tx=%lu replies=%lu missed=%lu", tf.packets, tf.tx,
+				 tf.replies, tf.missed);
+	bench_printf(" locks=%lu tries=%lu period=%lu period_min=%lu restarts=%lu\r\n", tf.locks, tf.tries,
+				 tf.period, tf.period_min, tf.restarts);
+}
+
+// Locks on a first TX packet (syn, row) heard on tf.c at tf.t_hop
+static void tfhss_lock(uint8_t row, uint16_t syn)
+{
+	tf.locked = true;
+	tf.confirmed = false;
+	tf.cand = false;
+	tf.tries++;
+	tf.key_syn = syn;
+	tf.hop_c = tf.c;
+	tf.misses = 0;
+	tf.row = row;
+	tf.c = tfhss_next(row, tf.c);
+	tfhss_tune(tf.c);
+	tf.t_deadline = micros() + TFHSS_WAIT_US;
+}
+
+static uint16_t tfhss_callback()
+{
+	uint8_t buf[TFHSS_MAX_LEN + 2];
+	uint32_t now = micros();
+	if(tf.t_end && (int32_t)(now - tf.t_end) >= 0)
+	{
+		bench_stop();
+		return 1000;
+	}
+	uint8_t state = CC2500_ReadReg(CC2500_35_MARCSTATE | CC2500_READ_BURST) & 0x1F;
+	if(state == 0x01)
+	{ // IDLE: a packet received (MCSM1 RXOFF_MODE = IDLE)
+		uint8_t n = CC2500_ReadReg(CC2500_3B_RXBYTES | CC2500_READ_BURST) & 0x7F;
+		int8_t foff = CC2500_ReadReg(CC2500_32_FREQEST | CC2500_READ_BURST);
+		int16_t ftotal = tf.trim + foff;		// This packet's offset, before following it
+		if(n < tf.len + 2)
+		{
+			tf.restarts++;
+			CC2500_Strobe(CC2500_SFRX);
+			CC2500_Strobe(CC2500_SRX);
+			return TFHSS_POLL_US;
+		}
+		CC2500_ReadData(buf, tf.len + 2);
+		uint8_t rx_ch = bench_rf_ch;
+		tf.packets++;
+		uint8_t prow;
+		uint16_t syn;
+		bool is_tx = tfhss_tx(buf, tf.air, tf.try_list, tf.c, &prow, &syn);
+		bool mine = is_tx && (!tf.locked || syn == tf.key_syn);
+		tf.tx += is_tx && (!tf.air || mine);
+		tf.replies += tf.air ? tf.locked && !mine : (buf[0] & 0x1F) >= TFHSS_TYPE_REPLY;
+		bool move = tf.follow && mine;
+		if(tf.air && mine && tf.locked)
+		{ // Follow the TX's frequency, a quarter of each estimate (they scatter +-15 steps). Not
+		  // before locking: noise packets would move it. Not on Surface: FOCCFG covers +-162 kHz
+		  // there (650 kHz filter), and FREQEST of its MSK packets made FSCTRL0 wander
+			int16_t t = tf.trim8 + foff * 2;
+			tf.trim8 = t > 127 * 8 ? 127 * 8 : t < -128 * 8 ? -128 * 8 : t;
+			tf.trim = (tf.trim8 + 4) >> 3;
+			CC2500_WriteReg(CC2500_0C_FSCTRL0, tf.trim);
+		}
+		if(move && tf.air && !tf.locked)
+		{ // Air before locking: wait for a later one on this channel
+			tf.cand = true;
+			tf.cand_row = prow;
+			tf.cand_syn = syn;
+			tf.t_cand = now;
+			move = false;
+		}
+		if(move && !tf.locked)
+		{
+			tf.t_hop = now;
+			tfhss_lock(prow, syn);
+		}
+		else if(move)
+		{
+			if(tf.c != tf.hop_c)
+			{ // The first TX packet on a new hop
+				uint32_t dt = now - tf.t_hop;
+				if(!tf.confirmed)
+				{
+					tf.confirmed = true;
+					tf.locks++;
+					bench_printf("@lock %lu n=%u row=%u key=%04x\r\n", now, tf.c, prow, tf.key_syn);
+				}
+				if(!tf.period)
+				{
+					if(!tf.samples++ || dt < tf.period_min) tf.period_min = dt;
+					if(tf.samples == TFHSS_PERIOD_SAMPLES)
+					{
+						tf.period = tf.period_min;
+						bench_printf("@period %lu us=%lu\r\n", now, tf.period);
+					}
+				}
+				else if(tf.misses == 0 && dt < tf.period_min * 3 / 2)
+				{
+					tf.period = (7 * tf.period + dt) / 8;
+					if(dt < tf.period_min) tf.period_min = dt;
+				}
+				tf.hop_c = tf.c;
+				tf.t_hop = now;
+				tf.misses = 0;
+			}
+			tf.row = prow;
+			tf.c = tfhss_next(tf.row, tf.c);
+			tfhss_tune(tf.c);
+			tf.t_deadline = tf.period ? tf.t_hop + tf.period + (tf.period - tf.period_min) + tf.late
+									  : micros() + TFHSS_WAIT_US;
+		}
+		else
+			CC2500_Strobe(CC2500_SRX);		// Same channel, FIFO read empty
+		bench_led_rx();
+		bench_printf("@rx %lu %u ", now, rx_ch);
+		bench_print_hex(buf, tf.len);
+		int8_t r = buf[tf.len];
+		bench_printf(" rssi=%d foff=%d\r\n", r / 2 - 72, ftotal * 1587 / 1000);
+	}
+	else if(state == 0x11)
+	{ // RX FIFO overflow
+		tf.restarts++;
+		CC2500_Strobe(CC2500_SFRX);
+		CC2500_Strobe(CC2500_SRX);
+	}
+	else if(tf.cand && (int32_t)(now - tf.t_cand) >= TFHSS_AIR_SETTLE_US)
+	{
+		tf.t_hop = tf.t_cand;
+		tfhss_lock(tf.cand_row, tf.cand_syn);
+	}
+	else if(tf.locked && (int32_t)(now - tf.t_deadline) >= 0)
+	{ // No TX packet on this hop
+		tf.missed += tf.confirmed;
+		if(!tf.confirmed || !tf.period || ++tf.misses >= TFHSS_CHANNELS)
+		{
+			if(!tf.confirmed && !tf.air) tf.try_list = !tf.try_list;
+			tf.locked = false;
+			tf.c = tf.park;
+		}
+		else
+		{
+			tf.c = tfhss_next(tf.row, tf.c);
+			tf.t_deadline = tf.t_hop + (tf.misses + 1) * tf.period + (tf.period - tf.period_min) + tf.late;
+		}
+		tfhss_tune(tf.c);
+	}
+	return TFHSS_POLL_US;
+}
+
+static void bench_cmd_tfhssrx(char *args)
+{
+	uint32_t secs = bench_number_or(&args, 10), park = bench_number_or(&args, 10);
+	uint32_t follow = bench_number_or(&args, 1), air = bench_number_or(&args, 0);
+	if(secs > 3600 || park == 0 || park > TFHSS_CHANNELS || follow > 1 || air > 1)
+	{
+		bench_printf("@err usage: tfhssrx [secs] [n] [follow] [air]\r\n");
+		return;
+	}
+	bench_stop();
+	bench_chip = BENCH_CC2500;
+	if(!bench_chip_reset(BENCH_CC2500))
+	{
+		bench_printf("@err chip=cc2500 not responding\r\n");
+		return;
+	}
+	// R334SBS (Surface) / T18SZ (Air) registers: doc/futaba.md in mpm-v2 (not in the repository)
+	static const uint8_t regs[][3] = {	// reg, Surface, Air
+		{CC2500_03_FIFOTHR, 0x07, 0x07}, {CC2500_04_SYNC1, 0xD3, 0xD3}, {CC2500_05_SYNC0, 0x91, 0x91},
+		{CC2500_06_PKTLEN, 14, 20}, {CC2500_07_PKTCTRL1, 0x04, 0x04}, {CC2500_08_PKTCTRL0, 0x00, 0x00},
+		{CC2500_0B_FSCTRL1, 0x0A, 0x1F}, {CC2500_0C_FSCTRL0, 0x00, 0x00},
+		{CC2500_0D_FREQ2, 0x5C, 0x5C}, {CC2500_0E_FREQ1, 0x98, 0x98}, {CC2500_0F_FREQ0, 0x9D, 0x9D},
+		{CC2500_10_MDMCFG4, 0x1D, 0x7C}, {CC2500_11_MDMCFG3, 0xE4, 0x43}, {CC2500_12_MDMCFG2, 0x72, 0x02},
+		{CC2500_13_MDMCFG1, 0x23, 0x23}, {CC2500_14_MDMCFG0, 0xF8, 0xF8}, {CC2500_15_DEVIATN, 0x00, 0x44},
+		{CC2500_16_MCSM2, 0x07, 0x07}, {CC2500_17_MCSM1, 0x00, 0x00}, {CC2500_18_MCSM0, 0x08, 0x08},
+		{CC2500_19_FOCCFG, 0x1E, 0x1E}, {CC2500_1A_BSCFG, 0x1C, 0x1C},
+		{CC2500_21_FREND1, 0xB6, 0xB6}, {CC2500_22_FREND0, 0x10, 0x10},
+		{CC2500_23_FSCAL3, 0xEA, 0xEA}, {CC2500_24_FSCAL2, 0x0A, 0x0A}, {CC2500_26_FSCAL0, 0x19, 0x11},
+		{CC2500_2C_TEST2, 0x88, 0x88}, {CC2500_2D_TEST1, 0x31, 0x31}, {CC2500_2E_TEST0, 0x0B, 0x0B},
+	};
+	for(uint8_t i = 0; i < sizeof(regs) / sizeof(regs[0]); i++)
+		CC2500_WriteReg(regs[i][0], regs[i][1 + air]);
+	memset(&tf, 0, sizeof(tf));
+	tf.air = air;
+	tf.follow = follow;
+	tf.park = park;
+	tf.len = air ? 20 : 14;
+	tf.late = air ? TFHSS_AIR_LATE_US : TFHSS_LATE_US;
+	// Calibrate each channel once, then FSCAL1 per hop (autocalibration off: MCSM0 08)
+	for(uint8_t n = 1; n <= TFHSS_CHANNELS; n++)
+	{
+		CC2500_Strobe(CC2500_SIDLE);
+		CC2500_WriteReg(CC2500_0A_CHANNR, 5 * (n - 1));
+		CC2500_Strobe(CC2500_SCAL);
+		delayMicroseconds(900);
+		tf.cal[n] = CC2500_ReadReg(CC2500_25_FSCAL1);
+	}
+	bench_set_mode(RX_EN);					// PA / LNA switch (GDO pins)
+	tf.c = park;
+	tfhss_tune(tf.c);
+	tf.t_end = secs ? micros() + secs * 1000000 : 0;
+	if(!tf.t_end && secs) tf.t_end = 1;
+	bench_start(BENCH_TFHSS, tfhss_callback);
+	bench_printf("@ok tfhssrx secs=%lu n=%lu follow=%lu air=%lu\r\n", secs, park, follow, air);
+}
+
 static void bench_stop()
 {
 	bench_callback = 0;
+	if(bench_job == BENCH_TFHSS)
+		tfhss_end();
 	if(bench_job == BENCH_PROTO)
 	{ // Leave the chips in a known state
 		remote_callback = 0;
@@ -1283,6 +1604,7 @@ static void bench_exec(char *line)
 	}
 	else if(strcmp(cmd, "proto") == 0)	bench_cmd_proto(args);
 	else if(strcmp(cmd, "user") == 0)	bench_cmd_user(args);
+	else if(strcmp(cmd, "tfhssrx") == 0)	bench_cmd_tfhssrx(args);
 	else
 		bench_printf("@err unknown command %s\r\n", cmd);
 }
@@ -1292,13 +1614,20 @@ static void bench_poll()
 {
 	bench_out_flush();
 	bench_led_poll();
+	static char last;
 	while(Serial.available())
 	{
 		char c = Serial.read();
+		bool lf_after_cr = c == '\n' && last == '\r';
+		last = c;
 		if(c == '\r' || c == '\n')
 		{
 			if(bench_line_len == 0)
+			{ // An empty line stops tfhssrx (as on mpm-v2), not the LF of a CR LF
+				if(!lf_after_cr && bench_job == BENCH_TFHSS)
+					bench_stop();
 				continue;
+			}
 			bench_line[bench_line_len] = 0;
 			bench_line_len = 0;
 			bench_exec(bench_line);
