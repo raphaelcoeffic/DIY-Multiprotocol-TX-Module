@@ -16,9 +16,11 @@ from the PATH:
 - auto: usb if a Maple USB device (1eaf:xxxx) is connected, else serial;
 - start: nothing written, a module waiting in its USB boot loader starts its
   firmware. The boot loader stays there at power up when it sees a USB host
-  (D-, PA11, low): plugged into a computer, a module only flashes. Its DFU
-  code (STM32duino-bootloader dfu.c) sets the "just uploaded" boot flag at
-  the first DFU_DNLOAD with data and copies that data to flash only at the
+  (D-, PA11, low): plugged into a computer, a module only flashes. Boot
+  loaders with DFU_DETACH (StmDualBoot dfu-detach) start the firmware on
+  that request. The others stall it when idle: their DFU code
+  (STM32duino-bootloader dfu.c) sets the "just uploaded" boot flag at the
+  first DFU_DNLOAD with data and copies that data to flash only at the
   next DFU_GETSTATUS; a USB reset in between resets the chip, which then
   starts the firmware at once. Needs libusb-1.0 (dfu-util's).
 
@@ -50,7 +52,9 @@ from serial.tools import list_ports  # noqa: E402
 MAPLE_VID = 0x1eaf
 MAPLE_DFU = '1eaf:0003'
 MAPLE_DFU_PID = 0x0003
+DFU_DETACH = 0
 DFU_DNLOAD = 1
+DFU_CLRSTATUS = 4
 
 
 def fail(msg) -> NoReturn:
@@ -201,9 +205,12 @@ def libusb(dfu_util):
 
 def maple_start(dfu_util, dry_run):
     """The firmware of a module in its USB boot loader starts, nothing
-    written: DFU_DNLOAD of one byte on alt 2 (the boot flag is set, the byte
-    stays in RAM), then a USB reset (the chip resets). The reset goes out
-    even if the boot loader refuses the DNLOAD (not idle)."""
+    written. DFU_DETACH first: boot loaders with it start the firmware and
+    leave USB. The others stall it when idle (then DFU_CLRSTATUS) or take it
+    without doing anything after a download. For those: DFU_DNLOAD of one
+    byte on alt 2 (the boot flag is set, the byte stays in RAM), then a USB
+    reset (the chip resets). The reset goes out even if the boot loader
+    refuses the DNLOAD (not idle)."""
     print('start the firmware of the module in its boot loader (%s)' % MAPLE_DFU, flush=True)
     if dry_run:
         return
@@ -211,6 +218,13 @@ def maple_start(dfu_util, dry_run):
     ctx = ctypes.c_void_p()
     if lib.libusb_init(ctypes.byref(ctx)) < 0:
         fail('libusb_init failed')
+
+    def present():
+        h = lib.libusb_open_device_with_vid_pid(ctx, MAPLE_VID, MAPLE_DFU_PID)
+        if h:
+            lib.libusb_close(h)
+        return bool(h)
+
     try:
         h = lib.libusb_open_device_with_vid_pid(ctx, MAPLE_VID, MAPLE_DFU_PID)
         if not h:
@@ -218,20 +232,32 @@ def maple_start(dfu_util, dry_run):
         r = lib.libusb_claim_interface(h, 0)
         if r >= 0:
             r = lib.libusb_set_interface_alt_setting(h, 0, 2)
-        if r >= 0:
-            lib.libusb_control_transfer(h, 0x21, DFU_DNLOAD, 0, 0, b'\xff', 1, 1000)
         if r < 0:
             lib.libusb_close(h)
             fail('cannot open the boot loader: %s' % lib.libusb_error_name(r).decode())
-        lib.libusb_reset_device(h)  # the device goes away: an error is expected
-        lib.libusb_close(h)
+        detached = lib.libusb_control_transfer(h, 0x21, DFU_DETACH, 1000, 0, None, 0, 1000) >= 0
+        if detached:
+            lib.libusb_close(h)
+            h = None
+            end = time.time() + 2
+            while present() and time.time() < end:
+                time.sleep(0.1)
+            detached = not present()
+            if not detached:
+                h = lib.libusb_open_device_with_vid_pid(ctx, MAPLE_VID, MAPLE_DFU_PID)
+                if h and lib.libusb_claim_interface(h, 0) >= 0:
+                    lib.libusb_set_interface_alt_setting(h, 0, 2)
+        else:
+            lib.libusb_control_transfer(h, 0x21, DFU_CLRSTATUS, 0, 0, None, 0, 1000)
+        if not detached and h:
+            lib.libusb_control_transfer(h, 0x21, DFU_DNLOAD, 0, 0, b'\xff', 1, 1000)
+            lib.libusb_reset_device(h)  # the device goes away: an error is expected
+            lib.libusb_close(h)
         # A boot loader that stayed comes back within a second
         time.sleep(2.5)
-        h = lib.libusb_open_device_with_vid_pid(ctx, MAPLE_VID, MAPLE_DFU_PID)
-        if h:
-            lib.libusb_close(h)
+        if present():
             fail('the module is still in its boot loader')
-        print('firmware started', flush=True)
+        print('firmware started (%s)' % ('DFU_DETACH' if detached else 'USB reset'), flush=True)
     finally:
         lib.libusb_exit(ctx)
 
