@@ -61,7 +61,7 @@
    cyrfid [hex]                 CYRF6936 MFG ID used by DSM (6 bytes, RAM only), none: the chip's -> @ok cyrfid=<hex>
    user [hex]                   run Bench_user_init(hex)/Bench_user_callback() from _Bench_User.ino
    tfhssrx [secs] [n] [follow] [air] [bind]  Futaba T-FHSS (air=1: T-FHSS Air) sniffer following the hops
-                                (bind=1, parked: a Surface receiver answering bind packets),
+                                (bind=1, parked: a Surface / Air receiver answering bind / link frames),
                                 as the mpm-v2 bench (CC2500 set up by it) -> @rx / @lock / @period lines,
                                 @end tfhssrx ... after secs (0: none), an empty line or "stop"
 
@@ -925,8 +925,63 @@ static struct {
 // plain bind packet (type 8 / 9) the reply type 24 / 25 (link mode << 4, the packet's ID, x, 01,
 // b5..b8) keyed as its telemetry (00 00 b5..b8 x n ID), ~840 us after the packet (CMT0), on the same
 // channel; the first bind packet with byte 1 bit 7 after a reply stores the bind (no more replies)
+// air: an Air receiver (R3006SB, as captured with a T6K): to a plain link frame (b0 F8, CRC over
+// 15) the reply 1F, the TX ID, x, the frame's channel, its own ID (TFHSS_AIR_RX_ID), 00 00 00 01,
+// plain, 6.45 ms after the frame on the next list channel; a link frame with b0 bit 2 and its ID
+// = linked (no more replies)
+#define TFHSS_AIR_RX_ID			152400931UL
+static void tfhss_air_bind_packet(const uint8_t *p)
+{
+	if((p[0] & 0xF8) != 0xF8 || tfhss_crc(p, 15, 0xFFFF) != (p[15] | p[16] << 8))
+		return;
+	uint8_t id[4] = { (uint8_t)TFHSS_AIR_RX_ID, (uint8_t)(TFHSS_AIR_RX_ID >> 8),
+		(uint8_t)(TFHSS_AIR_RX_ID >> 16), (uint8_t)(TFHSS_AIR_RX_ID >> 24) };
+	if(p[0] & 0x04)
+	{
+		tf.acks++;
+		if(!memcmp(p + 7, id, 4) && !tf.linked)
+		{
+			tf.linked = true;
+			bench_printf("@ev linked\r\n");
+		}
+	}
+	if(tf.linked) return;
+	uint8_t r[17];
+	memset(r, 0, sizeof(r));
+	r[0] = 0x1F;
+	memcpy(r + 1, p + 1, 6);
+	memcpy(r + 7, id, 4);
+	r[14] = 1;
+	uint16_t crc = tfhss_crc(r, 15, 0xFFFF);
+	r[15] = crc;
+	r[16] = crc >> 8;
+	// Read ~1.65 ms after the frame's start (23 + 3 bytes at 128 kbps, the poll); TX start ~90 us
+	delayMicroseconds(4700);
+	uint8_t n = tfhss_next(TFHSS_ROW_LIST, tf.c);
+	CC2500_Strobe(CC2500_SIDLE);
+	CC2500_WriteReg(CC2500_0A_CHANNR, 5 * (n - 1));
+	CC2500_WriteReg(CC2500_25_FSCAL1, tf.cal[n]);
+	CC2500_WriteReg(CC2500_06_PKTLEN, 17);
+	bench_set_mode(TX_EN);
+	CC2500_Strobe(CC2500_SFTX);
+	CC2500_WriteRegisterMulti(CC2500_3F_TXFIFO, r, 17);
+	CC2500_Strobe(CC2500_STX);
+	delayMicroseconds(1600);				// 23 bytes at 128 kbps: 1.44 ms
+	CC2500_WriteReg(CC2500_06_PKTLEN, tf.len);
+	bench_set_mode(RX_EN);
+	tfhss_tune(tf.c);
+	tf.replied = true;
+	tf.bind_replies++;
+	bench_printf("@ev reply n=%u\r\n", n);
+}
+
 static void tfhss_bind_packet(const uint8_t *p)
 {
+	if(tf.air)
+	{
+		tfhss_air_bind_packet(p);
+		return;
+	}
 	if((p[0] & 0x1E) != 8 || tfhss_crc(p, 12, 0xFFFF) != (p[12] | p[13] << 8))
 		return;
 	if(p[1] & 0x80)
@@ -1135,7 +1190,7 @@ static void bench_cmd_tfhssrx(char *args)
 	uint32_t secs = bench_number_or(&args, 10), park = bench_number_or(&args, 10);
 	uint32_t follow = bench_number_or(&args, 1), air = bench_number_or(&args, 0);
 	uint32_t bind = bench_number_or(&args, 0);
-	if(secs > 3600 || park == 0 || park > TFHSS_CHANNELS || follow > 1 || air > 1 || bind > 1 || (bind && (follow || air)))
+	if(secs > 3600 || park == 0 || park > TFHSS_CHANNELS || follow > 1 || air > 1 || bind > 1 || (bind && follow))
 	{
 		bench_printf("@err usage: tfhssrx [secs] [n] [follow] [air] [bind]\r\n");
 		return;
