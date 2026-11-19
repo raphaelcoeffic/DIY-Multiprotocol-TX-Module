@@ -922,9 +922,10 @@ static struct {
 } tf;
 
 // "bind": a Surface receiver in its link mode (R334SBS firmware, doc/futaba.md in mpm-v2): to a
-// plain bind packet (type 8 / 9) the reply type 24 / 25 (link mode << 4, the packet's ID, x, 01,
-// b5..b8) keyed as its telemetry (00 00 b5..b8 x n ID), ~840 us after the packet (CMT0), on the same
-// channel; the first bind packet with byte 1 bit 7 after a reply stores the bind (no more replies)
+// plain bind packet (type 8 / 9) the reply type 24 / 25 (link mode << 4, the packet's ID, x, its
+// channel byte, b5..b8) keyed as its telemetry (00 00 b5..b8 x n ID) with n the next list channel,
+// where it goes out (the receiver hops first, fffe8de5), ~840 us after the packet (CMT0); the first
+// bind packet with byte 1 bit 7 after a reply stores the bind (no more replies)
 // air: an Air receiver (R3006SB, as captured with a T6K): to a plain link frame (b0 F8, CRC over
 // 15) the reply 1F, the TX ID, x, the frame's channel, its own ID (TFHSS_AIR_RX_ID), 00 00 00 01,
 // plain, 6.45 ms after the frame on the next list channel; a link frame with b0 bit 2 and its ID
@@ -995,7 +996,8 @@ static void tfhss_bind_packet(const uint8_t *p)
 		if(tf.replied) return;
 	}
 	if(tf.linked) return;
-	uint8_t r[14], key[12] = {0, 0, p[8], p[9], p[10], p[11], p[6], tf.c, p[2], p[3], p[4], p[5]};
+	uint8_t n = tfhss_next(TFHSS_ROW_LIST, tf.c);
+	uint8_t r[14], key[12] = {0, 0, p[8], p[9], p[10], p[11], p[6], n, p[2], p[3], p[4], p[5]};
 	r[0] = (p[0] & 0x1F) == 9 ? 25 : 24;
 	r[1] = ((p[1] >> 4 & 7) == 1) << 4;
 	memcpy(r + 2, p + 2, 6);
@@ -1007,6 +1009,8 @@ static void tfhss_bind_packet(const uint8_t *p)
 	r[13] = crc >> 8;
 	delayMicroseconds(700);					// read up to TFHSS_POLL_US after its end
 	CC2500_Strobe(CC2500_SIDLE);
+	CC2500_WriteReg(CC2500_0A_CHANNR, 5 * (n - 1));
+	CC2500_WriteReg(CC2500_25_FSCAL1, tf.cal[n]);
 	bench_set_mode(TX_EN);
 	CC2500_Strobe(CC2500_SFTX);
 	CC2500_WriteRegisterMulti(CC2500_3F_TXFIFO, r, 14);
