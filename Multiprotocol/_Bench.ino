@@ -60,7 +60,8 @@
                                 (pkt: packet_in[0..16] received since the last "telem", DSM: RSSI + packet)
    cyrfid [hex]                 CYRF6936 MFG ID used by DSM (6 bytes, RAM only), none: the chip's -> @ok cyrfid=<hex>
    user [hex]                   run Bench_user_init(hex)/Bench_user_callback() from _Bench_User.ino
-   tfhssrx [secs] [n] [follow] [air]  Futaba T-FHSS (air=1: T-FHSS Air) sniffer following the hops,
+   tfhssrx [secs] [n] [follow] [air] [bind]  Futaba T-FHSS (air=1: T-FHSS Air) sniffer following the hops
+                                (bind=1, parked: a Surface receiver answering bind packets),
                                 as the mpm-v2 bench (CC2500 set up by it) -> @rx / @lock / @period lines,
                                 @end tfhssrx ... after secs (0: none), an empty line or "stop"
 
@@ -910,15 +911,57 @@ static bool tfhss_tx(const uint8_t *p, bool air, bool list, uint8_t c, uint8_t *
 }
 
 static struct {
-	bool air, follow, locked, confirmed, try_list, cand;
+	bool air, follow, locked, confirmed, try_list, cand, bind, replied, linked;
 	int8_t trim;							// FSCTRL0
 	int16_t trim8;							// FSCTRL0 x 8
 	uint8_t len, park, c, row, hop_c, cand_row;
 	uint16_t key_syn, cand_syn;
 	uint32_t late, t_end, t_hop, t_deadline, misses, t_cand, period, period_min, samples;
-	uint32_t packets, tx, replies, missed, locks, tries, restarts;
+	uint32_t packets, tx, replies, missed, locks, tries, restarts, bind_replies, acks;
 	uint8_t cal[TFHSS_CHANNELS + 1];
 } tf;
+
+// "bind": a Surface receiver in its link mode (R334SBS firmware, doc/futaba.md in mpm-v2): to a
+// plain bind packet (type 8 / 9) the reply type 24 / 25 (link mode << 4, the packet's ID, x, 01,
+// b5..b8) keyed as its telemetry (00 00 b5..b8 x n ID), ~840 us after the packet (CMT0), on the same
+// channel; the first bind packet with byte 1 bit 7 after a reply stores the bind (no more replies)
+static void tfhss_bind_packet(const uint8_t *p)
+{
+	if((p[0] & 0x1E) != 8 || tfhss_crc(p, 12, 0xFFFF) != (p[12] | p[13] << 8))
+		return;
+	if(p[1] & 0x80)
+	{
+		tf.acks++;
+		if(tf.replied && !tf.linked)
+		{
+			tf.linked = true;
+			bench_printf("@ev linked\r\n");
+		}
+		if(tf.replied) return;
+	}
+	if(tf.linked) return;
+	uint8_t r[14], key[12] = {0, 0, p[8], p[9], p[10], p[11], p[6], tf.c, p[2], p[3], p[4], p[5]};
+	r[0] = (p[0] & 0x1F) == 9 ? 25 : 24;
+	r[1] = ((p[1] >> 4 & 7) == 1) << 4;
+	memcpy(r + 2, p + 2, 6);
+	r[7] = p[7] & 0x1F;
+	memcpy(r + 8, p + 8, 4);
+	uint16_t crc = tfhss_crc(r, 12, 0xFFFF);
+	for(uint8_t i = 0; i < 12; i++) r[i] ^= key[i];
+	r[12] = crc;
+	r[13] = crc >> 8;
+	delayMicroseconds(700);					// read up to TFHSS_POLL_US after its end
+	CC2500_Strobe(CC2500_SIDLE);
+	bench_set_mode(TX_EN);
+	CC2500_Strobe(CC2500_SFTX);
+	CC2500_WriteRegisterMulti(CC2500_3F_TXFIFO, r, 14);
+	CC2500_Strobe(CC2500_STX);
+	delayMicroseconds(700);					// 22 bytes at 384 kbps: 460 us, + calibration-free start
+	bench_set_mode(RX_EN);
+	tfhss_tune(tf.c);
+	tf.replied = true;
+	tf.bind_replies++;
+}
 
 static void tfhss_tune(uint8_t n)
 {
@@ -938,6 +981,8 @@ static void tfhss_end()
 				 tf.replies, tf.missed);
 	bench_printf(" locks=%lu tries=%lu period=%lu period_min=%lu restarts=%lu\r\n", tf.locks, tf.tries,
 				 tf.period, tf.period_min, tf.restarts);
+	if(tf.bind)
+		bench_printf("@ev bind replies=%lu acks=%lu linked=%u\r\n", tf.bind_replies, tf.acks, tf.linked);
 }
 
 // Locks on a first TX packet (syn, row) heard on tf.c at tf.t_hop
@@ -983,6 +1028,8 @@ static uint16_t tfhss_callback()
 		tf.packets++;
 		uint8_t prow;
 		uint16_t syn;
+		if(tf.bind)
+			tfhss_bind_packet(buf);
 		bool is_tx = tfhss_tx(buf, tf.air, tf.try_list, tf.c, &prow, &syn);
 		bool mine = is_tx && (!tf.locked || syn == tf.key_syn);
 		tf.tx += is_tx && (!tf.air || mine);
@@ -1087,9 +1134,10 @@ static void bench_cmd_tfhssrx(char *args)
 {
 	uint32_t secs = bench_number_or(&args, 10), park = bench_number_or(&args, 10);
 	uint32_t follow = bench_number_or(&args, 1), air = bench_number_or(&args, 0);
-	if(secs > 3600 || park == 0 || park > TFHSS_CHANNELS || follow > 1 || air > 1)
+	uint32_t bind = bench_number_or(&args, 0);
+	if(secs > 3600 || park == 0 || park > TFHSS_CHANNELS || follow > 1 || air > 1 || bind > 1 || (bind && (follow || air)))
 	{
-		bench_printf("@err usage: tfhssrx [secs] [n] [follow] [air]\r\n");
+		bench_printf("@err usage: tfhssrx [secs] [n] [follow] [air] [bind]\r\n");
 		return;
 	}
 	bench_stop();
@@ -1117,6 +1165,7 @@ static void bench_cmd_tfhssrx(char *args)
 		CC2500_WriteReg(regs[i][0], regs[i][1 + air]);
 	memset(&tf, 0, sizeof(tf));
 	tf.air = air;
+	tf.bind = bind;
 	tf.follow = follow;
 	tf.park = park;
 	tf.len = air ? 20 : 14;
