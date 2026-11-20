@@ -918,19 +918,23 @@ static struct {
 	uint16_t key_syn, cand_syn;
 	uint32_t late, t_end, t_hop, t_deadline, misses, t_cand, period, period_min, samples;
 	uint32_t packets, tx, replies, missed, locks, tries, restarts, bind_replies, acks;
+	uint32_t data_ok, data_bad;		// bind, Surface, linked: TX packets with the full key ok / not
+	uint8_t bind_id[4], bind_x;		// bind, Surface: the TX ID and x of the bind packets
 	uint8_t cal[TFHSS_CHANNELS + 1];
 } tf;
 
 // "bind": a Surface receiver in its link mode (R334SBS firmware, doc/futaba.md in mpm-v2): to a
 // plain bind packet (type 8 / 9) the reply type 24 / 25 (link mode << 4, the packet's ID, x, its
-// channel byte, b5..b8) keyed as its telemetry (00 00 b5..b8 x n ID) with n the next list channel,
-// where it goes out (the receiver hops first, fffe8de5), ~840 us after the packet (CMT0); the first
-// bind packet with byte 1 bit 7 after a reply stores the bind (no more replies)
+// channel byte, its own ID TFHSS_SURFACE_RX_ID), plain (the list mode, 0x65F), on the next list
+// channel (the receiver hops first, fffe8de5), ~840 us after the packet (CMT0); the first bind
+// packet with byte 1 bit 7 after a reply stores the bind (no more replies); then the TX packets
+// heard on the parked channel are checked with the full key 00 00 ID x n RXID (data_ok / data_bad)
 // air: an Air receiver (R3006SB, as captured with a T6K): to a plain link frame (b0 F8, CRC over
 // 15) the reply 1F, the TX ID, x, the frame's channel, its own ID (TFHSS_AIR_RX_ID), 00 00 00 01,
 // plain, 6.45 ms after the frame on the next list channel; a link frame with b0 bit 2 and its ID
 // = linked (no more replies)
 #define TFHSS_AIR_RX_ID			152400931UL
+#define TFHSS_SURFACE_RX_ID		231602546UL		// tegots123's R334SBS
 static void tfhss_air_bind_packet(const uint8_t *p)
 {
 	if((p[0] & 0xF8) != 0xF8 || tfhss_crc(p, 15, 0xFFFF) != (p[15] | p[16] << 8))
@@ -983,6 +987,18 @@ static void tfhss_bind_packet(const uint8_t *p)
 		tfhss_air_bind_packet(p);
 		return;
 	}
+	uint8_t id[4] = { (uint8_t)TFHSS_SURFACE_RX_ID, (uint8_t)(TFHSS_SURFACE_RX_ID >> 8),
+		(uint8_t)(TFHSS_SURFACE_RX_ID >> 16), (uint8_t)(TFHSS_SURFACE_RX_ID >> 24) };
+	if(tf.linked && (p[0] & 0x1E) == 0)
+	{ // Servo packet (type 0 / 1): the full key with the bind's TX ID and our ID
+		uint8_t pl[12], key[12] = {0, 0, tf.bind_id[0], tf.bind_id[1], tf.bind_id[2], tf.bind_id[3],
+			tf.bind_x, tf.c, id[0], id[1], id[2], id[3]};
+		for(uint8_t i = 0; i < 12; i++) pl[i] = p[i] ^ key[i];
+		if(tfhss_crc(pl, 12, 0xFFFF) == (p[12] | p[13] << 8)) tf.data_ok++; else tf.data_bad++;
+		if((tf.data_ok + tf.data_bad) % 50 == 0)
+			bench_printf("@ev data ok=%lu bad=%lu\r\n", tf.data_ok, tf.data_bad);
+		return;
+	}
 	if((p[0] & 0x1E) != 8 || tfhss_crc(p, 12, 0xFFFF) != (p[12] | p[13] << 8))
 		return;
 	if(p[1] & 0x80)
@@ -997,14 +1013,15 @@ static void tfhss_bind_packet(const uint8_t *p)
 	}
 	if(tf.linked) return;
 	uint8_t n = tfhss_next(TFHSS_ROW_LIST, tf.c);
-	uint8_t r[14], key[12] = {0, 0, p[8], p[9], p[10], p[11], p[6], n, p[2], p[3], p[4], p[5]};
+	uint8_t r[14];
+	memcpy(tf.bind_id, p + 2, 4);
+	tf.bind_x = p[6];
 	r[0] = (p[0] & 0x1F) == 9 ? 25 : 24;
 	r[1] = ((p[1] >> 4 & 7) == 1) << 4;
-	memcpy(r + 2, p + 2, 6);
+	memcpy(r + 2, p + 2, 5);
 	r[7] = p[7] & 0x1F;
-	memcpy(r + 8, p + 8, 4);
+	memcpy(r + 8, id, 4);
 	uint16_t crc = tfhss_crc(r, 12, 0xFFFF);
-	for(uint8_t i = 0; i < 12; i++) r[i] ^= key[i];
 	r[12] = crc;
 	r[13] = crc >> 8;
 	delayMicroseconds(700);					// read up to TFHSS_POLL_US after its end
@@ -1041,7 +1058,8 @@ static void tfhss_end()
 	bench_printf(" locks=%lu tries=%lu period=%lu period_min=%lu restarts=%lu\r\n", tf.locks, tf.tries,
 				 tf.period, tf.period_min, tf.restarts);
 	if(tf.bind)
-		bench_printf("@ev bind replies=%lu acks=%lu linked=%u\r\n", tf.bind_replies, tf.acks, tf.linked);
+		bench_printf("@ev bind replies=%lu acks=%lu linked=%u data_ok=%lu data_bad=%lu\r\n",
+					 tf.bind_replies, tf.acks, tf.linked, tf.data_ok, tf.data_bad);
 }
 
 // Locks on a first TX packet (syn, row) heard on tf.c at tf.t_hop
