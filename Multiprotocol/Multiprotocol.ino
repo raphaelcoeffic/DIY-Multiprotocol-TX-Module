@@ -42,6 +42,11 @@
 #include "_MyConfig.h"
 #endif
 
+//Options of the CMake build (MULTI_OPTIONS, docs/Compiling_CMake.md)
+#if defined(USE_MULTI_OPTIONS)
+#include "multi_options.h"
+#endif
+
 #include "Pins.h"
 #include "TX_Def.h"
 #include "Validate.h"
@@ -264,6 +269,9 @@ uint8_t packet_in[TELEMETRY_BUFFER_SIZE];//telemetry receiving packets
 	#ifdef MULTI_CONFIG_INO
 		uint8_t CONFIG_SerialRX_val[7];
 		bool CONFIG_SerialRX=false;
+	#endif
+	#ifdef FUTABA_FW_TELEMETRY
+		uint8_t futaba_telem[3 + 16], futaba_telem_len;	// MULTI_TELEMETRY_FUTABA
 	#endif
 	#ifdef RLINK_HUB_TELEMETRY
 		uint8_t RLINK_SerialRX_val[8];
