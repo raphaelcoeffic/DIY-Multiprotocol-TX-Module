@@ -3,12 +3,11 @@
 name: MULTI Test, Build, Deploy, Release
 
 on:
-  # Trigger the workflow on pushes, except those that are tagged (avoids double-testing releases)
+  # Trigger the workflow on pushes to the master branch (other branches: through their pull
+  # requests, below, so that a change is built once; tags are not built)
   push:
     branches:
-    - '**'
-    tags-ignore:
-      - '**'
+    - master
     paths:
     - '.github/workflows/**'
     - 'buildroot/bin/**'
@@ -68,9 +67,13 @@ jobs:
       - uses: actions/checkout@v7
       
       - name: Install Arduino CLI
-        uses: arduino/setup-arduino-cli@v2
-        with:
-          version: "0.32.2"
+        run: |
+          # arduino-cli 0.32.2 (arduino/setup-arduino-cli runs on Node.js 20)
+          curl -fsSL -o $RUNNER_TEMP/arduino-cli.tar.gz https://downloads.arduino.cc/arduino-cli/arduino-cli_0.32.2_Linux_64bit.tar.gz
+          echo "325ae8c036518200a9810dcf2cd447d9cb946e7a9ce9b2691db59dfb50048807  $RUNNER_TEMP/arduino-cli.tar.gz" | sha256sum -c -
+          mkdir -p $HOME/.local/bin
+          tar -xzf $RUNNER_TEMP/arduino-cli.tar.gz -C $HOME/.local/bin arduino-cli
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
       
       - name: Prepare build environment
         run: |
@@ -257,9 +260,13 @@ jobs:
       - uses: actions/checkout@v7
       
       - name: Install Arduino CLI
-        uses: arduino/setup-arduino-cli@v2
-        with:
-          version: "0.32.2"
+        run: |
+          # arduino-cli 0.32.2 (arduino/setup-arduino-cli runs on Node.js 20)
+          curl -fsSL -o $RUNNER_TEMP/arduino-cli.tar.gz https://downloads.arduino.cc/arduino-cli/arduino-cli_0.32.2_Linux_64bit.tar.gz
+          echo "325ae8c036518200a9810dcf2cd447d9cb946e7a9ce9b2691db59dfb50048807  $RUNNER_TEMP/arduino-cli.tar.gz" | sha256sum -c -
+          mkdir -p $HOME/.local/bin
+          tar -xzf $RUNNER_TEMP/arduino-cli.tar.gz -C $HOME/.local/bin arduino-cli
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
       
       - name: Prepare build environment
         run: |
