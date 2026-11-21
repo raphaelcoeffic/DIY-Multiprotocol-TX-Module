@@ -42,6 +42,11 @@
 #include "_MyConfig.h"
 #endif
 
+//Options of the CMake build (MULTI_OPTIONS, docs/Compiling_CMake.md)
+#if defined(USE_MULTI_OPTIONS)
+#include "multi_options.h"
+#endif
+
 #include "Pins.h"
 #include "TX_Def.h"
 #include "Validate.h"
