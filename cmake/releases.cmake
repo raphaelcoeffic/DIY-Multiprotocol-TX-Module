@@ -42,9 +42,9 @@ set(_no_protocols -*_A7105_INO -*_CC2500_INO -*_CYRF6936_INO -*_NRF24L01_INO -*_
 
 if(MULTI_BOARD STREQUAL "stm32f103c8" AND MULTI_DEBUG STREQUAL "none")
   multi_release_orders(stm32f103-cc2500-64k mm-stm-cc2500-64-{o}
-    -SCANNER_CC2500_INO ${_cc2500_only})
+    -SCANNER_CC2500_INO -FRSKYA_CC2500_INO ${_cc2500_only})
   multi_release_orders(stm32f103-cc2500-64k mm-stm-cc2500-64-{o}-lbt
-    -SCANNER_CC2500_INO ${_cc2500_only} MULTI_EU)
+    -SCANNER_CC2500_INO -FRSKYA_CC2500_INO ${_cc2500_only} MULTI_EU)
 
 elseif(MULTI_BOARD STREQUAL "stm32f103cb" AND MULTI_DEBUG STREQUAL "none")
   multi_release_orders(stm32f103-cc2500-128k mm-stm-cc2500-{o} ${_cc2500_only})
