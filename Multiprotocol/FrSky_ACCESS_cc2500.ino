@@ -437,7 +437,7 @@ uint16_t FRSKYA_callback()
 			#ifdef MULTI_SYNC
 				telemetry_set_input_sync(FRSKYA_PERIOD);
 			#endif
-			CC2500_SetFreqOffset();
+			FrSky_SetFreqOffset();
 			CC2500_SetPower();
 			uint8_t ch;
 			if(FrSkyA_mode != FRSKYA_DATA && IS_BIND_DONE)
@@ -542,7 +542,7 @@ void FRSKYA_init()
 	for(uint8_t c = 0; c <= FRSKYA_BIND_CH; c++)
 	{// Calibrate the hops, register and bind channels
 		CC2500_Strobe(CC2500_SIDLE);
-		CC2500_WriteReg(CC2500_0A_CHANNR, hopping_frequency[c]);
+		FrSkyX_set_channel(hopping_frequency[c]);
 		CC2500_Strobe(CC2500_SCAL);
 		delayMicroseconds(900);
 		calData[c] = CC2500_ReadReg(CC2500_25_FSCAL1);
