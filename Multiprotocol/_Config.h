@@ -170,7 +170,8 @@
 //Comment the protocols you are not using with "//" to save Flash space.
 
 //Already defined protocols selection
-//#define MULTI_AIR			//Only Air protocols will be available, all the others are disabled
+//MULTI_AIR is selected by default: with all the protocols, the firmware does not fit in the 128KB STM32 modules
+#define MULTI_AIR			//Only Air protocols will be available, all the others are disabled
 //#define MULTI_SURFACE		//Only Surface protocols will be available, all the others are disabled
 //#define MULTI_EU			//Only LBT/EU protocols will be available, all the others are disabled
 
