@@ -225,6 +225,7 @@ jobs:
             build/mpm-v2/mpm-v2-full.bin
             build/mpm-v2/mpm-v2-full.hex
             build/xjt-lite/firmware.bin
+            build/xjt-lite/firmware.frk
             build/cc2755-lp/cc27-mpm.bin
             build/cc2755-lp/cc27-mpm-update.bin
             build/zbdongle-p/zbdongle-p-firmware.bin

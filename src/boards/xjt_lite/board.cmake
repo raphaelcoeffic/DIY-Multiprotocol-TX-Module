@@ -27,10 +27,10 @@ include(platforms/cc26xx/platform.cmake)
 # The reduced MPM: its protocols (mpm/multi/mpm_config.h, xjt_chip_sources)
 list(APPEND board_definitions MPM_REDUCED)
 
-# The MPM port: FrSky D and X, V2x2, XK (mpm/multi/mpm_config.h), without
-# the A7105 and CYRF6936 emulations (RAM). firmware.elf and firmware.bin in
-# the build directory; flash-firmware: at XJT_APP_START, with the patched
-# OpenOCD
+# The MPM port: the CC2500 protocols, V2x2, XK, MJXq (mpm/multi/mpm_config.h),
+# without the A7105 and CYRF6936 emulations (RAM). firmware.elf, firmware.bin
+# and firmware.frk in the build directory; flash-firmware: at XJT_APP_START,
+# with the patched OpenOCD
 set(xjt_chip_sources ${mpm_chip_sources})
 list(REMOVE_ITEM xjt_chip_sources mpm/multi/a7105.c mpm/multi/cyrf6936.c)
 add_board_app(firmware ${board_dir}/xjt_lite.ld
@@ -48,7 +48,26 @@ add_board_app(firmware ${board_dir}/xjt_lite.ld
 )
 target_mpm(firmware_elf)
 target_link_options(firmware_elf PRIVATE -Wl,--defsym=__app_start=${XJT_APP_START})
-add_custom_target(firmware ALL DEPENDS ${CMAKE_BINARY_DIR}/firmware.bin)
+# The debug log on the telemetry output (mpm_port.c), off by default
+option(XJT_LOG "XJT-Lite: the debug log on the telemetry output" OFF)
+if (XJT_LOG)
+    target_compile_definitions(firmware_elf PRIVATE XJT_LOG)
+endif()
+# firmware.frk: the file for FrSky's boot loader (the radio flashes it over
+# S.Port, as FrSky's own XJT-Lite files), at 0x8000 only: another boot loader
+# takes its own format
+set(xjt_files ${CMAKE_BINARY_DIR}/firmware.bin)
+if (xjt_app_start EQUAL xjt_frsky_start)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/firmware.frk
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/frk_pack.py ${XJT_APP_START}
+                ${CMAKE_BINARY_DIR}/firmware.bin ${CMAKE_BINARY_DIR}/firmware.frk
+        DEPENDS ${CMAKE_BINARY_DIR}/firmware.bin ${CMAKE_SOURCE_DIR}/tools/frk_pack.py
+        VERBATIM
+    )
+    list(APPEND xjt_files ${CMAKE_BINARY_DIR}/firmware.frk)
+endif()
+add_custom_target(firmware ALL DEPENDS ${xjt_files})
 
 add_custom_target(flash-firmware
     COMMAND ${XJT_OPENOCD} -f board/frsky_xjt_lite.cfg
