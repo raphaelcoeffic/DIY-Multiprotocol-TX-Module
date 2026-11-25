@@ -22,6 +22,9 @@
  #define FRSKY_RX_D16v2_LENGTH	0x1D+1
  #define FRSKY_RX_D8_LENGTH		0x11+1
  #define FRSKY_RX_FORMATS		5
+#ifndef FRSKY_RX_TUNE_RANGE			// FSCTRL0 steps the tune search covers either way
+	#define FRSKY_RX_TUNE_RANGE	127
+#endif
 
 enum
 {
@@ -426,12 +429,12 @@ uint16_t FRSKY_RX_callback()
 	switch(phase)
 	{
 		case FRSKY_RX_TUNE_START:
-			if (len == packet_length + 2) //+2=RSSI+LQI+CRC
+			if (len >= packet_length + 2) //+2=RSSI+LQI+CRC; the first of more (an 18 ms step can hold 2 packets)
 			{
-				CC2500_ReadData(packet, len);
+				CC2500_ReadData(packet, packet_length + 2);
 				if(frskyx_rx_check_crc_id(true,true))
 				{
-					FRSKY_RX_finetune = -127;
+					FRSKY_RX_finetune = -FRSKY_RX_TUNE_RANGE;
 					CC2500_WriteReg(CC2500_0C_FSCTRL0, FRSKY_RX_finetune);
 					phase = FRSKY_RX_TUNE_LOW;
 					debugln("FRSKY_RX_TUNE_LOW");
@@ -448,12 +451,12 @@ uint16_t FRSKY_RX_callback()
 			return 18000;
 
 		case FRSKY_RX_TUNE_LOW:
-			if (len == packet_length + 2) //+2=RSSI+LQI+CRC
+			if (len >= packet_length + 2) //+2=RSSI+LQI+CRC; the first of more (an 18 ms step can hold 2 packets)
 			{
-				CC2500_ReadData(packet, len);
+				CC2500_ReadData(packet, packet_length + 2);
 				if(frskyx_rx_check_crc_id(true,false)) {
 					tune_low = FRSKY_RX_finetune;
-					FRSKY_RX_finetune = 127;
+					FRSKY_RX_finetune = FRSKY_RX_TUNE_RANGE;
 					CC2500_WriteReg(CC2500_0C_FSCTRL0, FRSKY_RX_finetune);
 					phase = FRSKY_RX_TUNE_HIGH;
 					debugln("FRSKY_RX_TUNE_HIGH");
@@ -467,9 +470,9 @@ uint16_t FRSKY_RX_callback()
 			return 18000;
 
 		case FRSKY_RX_TUNE_HIGH:
-			if (len == packet_length + 2) //+2=RSSI+LQI+CRC
+			if (len >= packet_length + 2) //+2=RSSI+LQI+CRC; the first of more (an 18 ms step can hold 2 packets)
 			{
-				CC2500_ReadData(packet, len);
+				CC2500_ReadData(packet, packet_length + 2);
 				if(frskyx_rx_check_crc_id(true,false)) {
 					tune_high = FRSKY_RX_finetune;
 					FRSKY_RX_finetune = (tune_low + tune_high) / 2;
@@ -494,9 +497,9 @@ uint16_t FRSKY_RX_callback()
 			return 18000;
 
 		case FRSKY_RX_BIND:
-			if (len == packet_length + 2) //+2=RSSI+LQI+CRC
+			if (len >= packet_length + 2) //+2=RSSI+LQI+CRC; the first of more (an 18 ms step can hold 2 packets)
 			{
-				CC2500_ReadData(packet, len);
+				CC2500_ReadData(packet, packet_length + 2);
 				if(frskyx_rx_check_crc_id(true,false)) {
 					if(FRSKY_RX_format != FRSKY_RX_D16v2LBT && FRSKY_RX_format != FRSKY_RX_D16v2FCC)
 					{// D8 & D16v1

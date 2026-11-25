@@ -736,7 +736,7 @@ static void CFLIE_RF_init()
 //     }
 // }
 
-static uint16_t CFLIE_callback()
+uint16_t CFLIE_callback()
 {
     switch (phase) {
     case CFLIE_INIT_SEARCH:

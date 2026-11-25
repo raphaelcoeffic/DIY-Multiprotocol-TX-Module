@@ -31,6 +31,7 @@ const char STR_BAYANG[]		="Bayang";
 const char STR_FRSKYL[]		="FrSky L";
 const char STR_FRSKYX[]		="FrSky X";
 const char STR_FRSKYX2[]	="FrSkyX2";
+const char STR_FRSKYA[]	="FrSkyA";
 const char STR_ESKY[]		="ESky";
 const char STR_MT99XX[]		="MT99XX";
 const char STR_MT99XX2[]	="MT99XX2";
@@ -127,8 +128,10 @@ const char STR_SUBTYPE_HUBSAN[] =     "\x04""H107""H301""H501";
 const char STR_SUBTYPE_FRSKYD[] =     "\x06""D8\0   ""Cloned";
 #ifndef MULTI_EU
 	const char STR_SUBTYPE_FRSKYX[] =     "\x07""D16\0   ""D16 8ch""LBT(EU)""LBT 8ch""Cloned\0""Clo 8ch";
+	const char STR_SUBTYPE_FRSKYA[] =     "\x06""16ch\0 ""8ch\0  ""EU16ch""EU 8ch";
 #else
 	const char STR_SUBTYPE_FRSKYX[] =     "\x07""--->\0  ""--->\0  ""LBT(EU)""LBT 8ch""Cloned\0""Clo 8ch";
+	const char STR_SUBTYPE_FRSKYA[] =     "\x06""--->\0 ""--->\0 ""EU16ch""EU 8ch";
 #endif
 const char STR_SUBTYPE_HISKY[] =      "\x05""Std\0 ""HK310";
 const char STR_SUBTYPE_V2X2[] =       "\x06""Std\0  ""JXD506""MR101\0";
@@ -187,7 +190,11 @@ const char STR_SUBTYPE_REALACC[] =    "\x06""R11\0  ""WLV8TX";
 const char STR_SUBTYPE_KYOSHO[] =     "\x04""FHSS""Hype";
 const char STR_SUBTYPE_KYOSHO2[] =    "\x05""KT-17";
 const char STR_SUBTYPE_KYOSHO3[] =    "\x03""ASF";
-const char STR_SUBTYPE_FUTABA[] =     "\x05""SFHSS";
+#ifdef FUTABA_TFHSS
+	const char STR_SUBTYPE_FUTABA[] =     "\x06""SFHSS\0""TFHSS\0""TFH-SR""TF-Air";
+#else
+	const char STR_SUBTYPE_FUTABA[] =     "\x05""SFHSS";
+#endif
 const char STR_SUBTYPE_JJRC345[] =    "\x08""JJRC345\0""SkyTmblr";
 const char STR_SUBTYPE_MOULDKG[] =    "\x05""A4444""D4444""A664\0";
 const char STR_SUBTYPE_KF606[] =      "\x06""KF606\0""MIG320""ZCZ50\0";
@@ -337,6 +344,9 @@ const mm_protocol_definition multi_protocols[] = {
 		{PROTO_FRSKYX,     STR_FRSKYX,    STR_SUBTYPE_FRSKYX,    6, OPTION_RFTUNE,  1, 0, SW_CC2500, FRSKYX_init,     FRSKYX_callback     },
 		{PROTO_FRSKYX2,    STR_FRSKYX2,   STR_SUBTYPE_FRSKYX,    6, OPTION_RFTUNE,  1, 0, SW_CC2500, FRSKYX_init,     FRSKYX_callback     },
 	#endif
+	#if defined(FRSKYA_CC2500_INO)
+		{PROTO_FRSKYA,     STR_FRSKYA,    STR_SUBTYPE_FRSKYA,    4, OPTION_RFTUNE,  1, 0, SW_CC2500, FRSKYA_init,     FRSKYA_callback     },
+	#endif
 //OpenTX 2.3.x issue: DO NOT CHANGE ORDER above
 	#if defined(FRSKYL_CC2500_INO)
 		{PROTO_FRSKYL,     STR_FRSKYL,    STR_SUBTYPE_FRSKYL,    2, OPTION_RFTUNE,  0, 0, SW_CC2500, FRSKYL_init,     FRSKYL_callback     },
@@ -349,7 +359,11 @@ const mm_protocol_definition multi_protocols[] = {
 		#endif
 	#endif
 	#if defined(FUTABA_CC2500_INO)
+		#if defined(FUTABA_TFHSS)
+		{PROTO_FUTABA,     STR_FUTABA,    STR_SUBTYPE_FUTABA,    4, OPTION_RFTUNE,  1, 1, SW_CC2500, FUTABA_init,     FUTABA_callback     },
+		#else
 		{PROTO_FUTABA,     STR_FUTABA,    STR_SUBTYPE_FUTABA,    1, OPTION_RFTUNE,  1, 1, SW_CC2500, SFHSS_init,      SFHSS_callback      },
+		#endif
 	#endif
 	#if defined(FX_NRF24L01_INO)
 		{PROTO_FX,         STR_FX,        STR_SUBTYPE_FX,        7, OPTION_NONE,    0, 0, SW_NRF,    FX_init,         FX_callback         },

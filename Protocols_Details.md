@@ -92,6 +92,7 @@ CFlie|AIR|38|CFlie||||||||NRF24L01|
 [Flysky AFHDS2A](Protocols_Details.md#FLYSKY-AFHDS2A---28)||28|PWM_IBUS|PPM_IBUS|PWM_SBUS|PPM_SBUS|Gyro_Off|Gyro_On|Gyro_On_Rev||A7105|
 [Flysky AFHDS2A RX](Protocols_Details.md#FLYSKY-AFHDS2A-RX---56)||56|Multi|CPPM|||||||A7105|
 [FQ777](Protocols_Details.md#FQ777---23)||23|124|XBM37|||||||NRF24L01|SSV7241
+[FrskyA](Protocols_Details.md#FRSKYA---112)||112|16ch|8ch|EU16ch|EU8ch|||||CC2500|
 [FrskyD](Protocols_Details.md#FRSKYD---3)||3|D8|Cloned|||||||CC2500|
 [FrskyL](Protocols_Details.md#FRSKYL---67)||67|LR12|LR12 6CH|||||||CC2500|
 [FrskyR9](Protocols_Details.md#FRSKYR9---65)||65|FrskyR9|R9_915|R9_868||||||SX1276|
@@ -99,7 +100,7 @@ CFlie|AIR|38|CFlie||||||||NRF24L01|
 [FrskyX](Protocols_Details.md#FRSKYX---15)||15|CH_16|CH_8|EU_16|EU_8|Cloned|Cloned_8|||CC2500|
 [FrskyX2](Protocols_Details.md#FRSKYX2---64)||64|CH_16|CH_8|EU_16|EU_8|Cloned|Cloned_8|||CC2500|
 [Frsky_RX](Protocols_Details.md#FRSKY_RX---55)||55|Multi|CloneTX|EraseTX|CPPM|||||CC2500|
-[Futaba/SFHSS](Protocols_Details.md#Futaba---21)||21|SFHSS||||||||CC2500|
+[Futaba](Protocols_Details.md#Futaba---21)||21|SFHSS|TFHSS|TFH-SR|TF-Air|||||CC2500|
 [FX](Protocols_Details.md#FX---58)||58|FX816|FX620|9630|Q560|QF012|BM26|A570||NRF24L01|
 [FY326](Protocols_Details.md#FY326---20)||20|FY326|FY319|||||||NRF24L01|
 [GD00X](Protocols_Details.md#GD00X---47)||47|GD_V1*|GD_V2*|||||||NRF24L01|XN297L
@@ -955,6 +956,45 @@ Use the identifier learnt from another FrSky radio when binding with the FrSkyRX
 ## FRSKYX2 - *64*
 Same as [FrskyX](Protocols_Details.md#FRSKYX---15) but for D16 v2.1.0 FCC/LBT.
 
+## FRSKYA - *112*
+Models: FrSky ACCESS 2.4GHz receivers, tested with the RX6R (ACCESS firmware 2.1.8) and the Archer Plus SR10+ (1.0.10 and 3.0.3). Protocol also known as ACCESS.
+
+Not supported: TANDEM and TWIN receivers, race mode, 24 channels, more than one receiver per model, receiver firmware updates.
+
+Extended limits and failsafe supported
+
+Telemetry enabled for A1 (RxBatt), RSSI, TX_RSSI, TX_LQI and the S.Port sensors, as FrskyX. S.Port packets from the radio are sent to the receiver (for example the Archer Plus stabilizer settings), this needs a radio firmware able to send them to a FrskyA module.
+
+The receiver options (outputs, telemetry, F.Port/S.Bus...) are set with the [FrSky ACCESS RX script](https://github.com/pascallanger/DIY-Multiprotocol-TX-Module/tree/master/Lua_scripts#frsky-access-rx).
+
+Option for this protocol corresponds to fine frequency tuning, as FrskyX. Check the [Frequency Tuning page](/docs/Frequency_Tuning.md) to determine it.
+
+Bind: a receiver is registered to the module, then bound, both during the same bind:
+- put the receiver in register mode (RX6R: hold its bind button while powering it until the LEDs alternate; Archer Plus: see its manual) and start the bind on the radio
+- once the receiver has registered, power cycle it normally while the module is still in bind: it binds and the link starts
+
+If no receiver answers the registration within 2 seconds, the module looks for an already registered receiver to bind, and both steps alternate until the end of the bind. The RX number of the model is sent to the receiver at bind (Model Match).
+
+### Sub_protocol 16ch - *0*
+FCC, 16 channels. A frame every 7ms carries channels 1-8 and 9-16 in turn.
+
+CH1|CH2|CH3|CH4|CH5|CH6|CH7|CH8|CH9|CH10|CH11|CH12|CH13|CH14|CH15|CH16
+---|---|---|---|---|---|---|---|---|----|----|----|----|----|----|----
+CH1|CH2|CH3|CH4|CH5|CH6|CH7|CH8|CH9|CH10|CH11|CH12|CH13|CH14|CH15|CH16
+
+### Sub_protocol 8ch - *1*
+FCC, 8 channels every 7ms.
+
+CH1|CH2|CH3|CH4|CH5|CH6|CH7|CH8
+---|---|---|---|---|---|---|---
+CH1|CH2|CH3|CH4|CH5|CH6|CH7|CH8
+
+### Sub_protocol EU16ch - *2*
+Same as 16ch for the EU region. ACCESS uses the same frequencies, hopping and timing in both regions, only the region sent to the receiver changes.
+
+### Sub_protocol EU8ch - *3*
+Same as 8ch for the EU region.
+
 ## FRSKY_RX - *55*
 
 ### Sub_protocol Multi - *0*
@@ -1135,7 +1175,7 @@ Settings include:
 * setting failsafe values
 
 ## Futaba - *21*
-Also called SFHSS depending on radio version.
+Also called SFHSS depending on radio version. Sub protocols S-FHSS, T-FHSS (Surface), T-FHSS SR and T-FHSS Air. The T-FHSS sub protocols are only available on the 128KB STM32 modules, and the AIR firmwares only have T-FHSS Air (TFHSS and TFHSS_SR are surface sub protocols).
 
 ### Sub_protocol SFHSS - *0*
 Models: Futaba SFHSS RXs and some XK models.
@@ -1152,6 +1192,49 @@ This protocol does not use bind on the TX side. The RX attaches to the first S-F
 CH1|CH2|CH3|CH4|CH5|CH6|CH7|CH8
 ---|---|---|---|---|---|---|---
 A|E|T|R|CH5|CH6|CH7|CH8
+
+### Sub_protocol TFHSS - *1*
+T-FHSS Surface. Models: Futaba T-FHSS surface receivers (cars, boats) like the R334SBS.
+
+Failsafe and telemetry supported. Extended limits supported.
+
+RX output will match the Futaba standard servo throw, mid point.
+
+Option for this protocol corresponds to fine frequency tuning, the same value as for S-FHSS.
+
+Bind: put the receiver in its link mode (see its manual) and start a bind on the TX side close to the receiver. The bind ends about 1 s after the receiver answers, 10 s at most. The TX ID comes from the RX number (model match). The receiver's ID, learnt at the bind and needed to drive it, is stored per RX number in the module: bind again after changing the RX number or the receiver.
+
+Telemetry: the receiver's voltage (A1) and link quality (RSSI), and its S.BUS2 sensor slots (Futaba telemetry frame, decoded by the radio).
+
+CH1|CH2|CH3|CH4|CH5|CH6|CH7|CH8
+---|---|---|---|---|---|---|---
+ST|THR|CH3|CH4|CH5|CH6|CH7|CH8
+
+CH1 to CH4 are sent every frame (3 ms), CH5 to CH8 one per frame.
+
+### Sub_protocol TFHSS_SR - *2*
+T-FHSS SR (Super Response), the receiver bound in SR mode: frames every 1.2 ms, digital servos only. No telemetry. Otherwise as T-FHSS.
+
+CH1|CH2|CH3|CH4|CH5|CH6|CH7|CH8
+---|---|---|---|---|---|---|---
+ST|THR|CH3|CH4|NB_ST|NB_THR|NB_3|NB_4
+
+NB_ST..4: Set to 100% for Narrow-band servos (the "SR channels" of Futaba radios) associated to CH1..4
+
+### Sub_protocol TFHSS_AIR - *3*
+T-FHSS Air. Models: Futaba T-FHSS Air receivers like the R3006SB and R3008SB.
+
+Telemetry supported. Failsafe: the receiver's own (set it on the receiver).
+
+Option for this protocol corresponds to fine frequency tuning, the same value as for S-FHSS.
+
+Bind: start a bind on the TX side, then put the receiver in its link mode (see its manual) close to the module. The bind ends when the receiver answers, 20 s at most. Without a bind, the module finds the receiver's ID in its telemetry.
+
+Telemetry: the receiver's voltage (A1) and its S.BUS2 sensor slots (Futaba telemetry frame, decoded by the radio).
+
+CH1|CH2|CH3|CH4|CH5|CH6|CH7|CH8|CH9|CH10|CH11|CH12|CH13|CH14|CH15|CH16
+---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---
+A|E|T|R|CH5|CH6|CH7|CH8|CH9|CH10|CH11|CH12|CH13|CH14|CH15|CH16
 
 ## Skyartec - *68*
 

@@ -19,7 +19,7 @@
 #define VERSION_MAJOR		1
 #define VERSION_MINOR		3
 #define VERSION_REVISION	4
-#define VERSION_PATCH_LEVEL	74
+#define VERSION_PATCH_LEVEL	77
 
 #define MODE_SERIAL 0
 
@@ -137,6 +137,7 @@ enum PROTOCOLS
 	PROTO_WPL		= 107,	// =>NRF24L01
 	PROTO_ARES		= 108,	// =>CC2500
 	PROTO_MOFLY		= 109,	// =>CC2500 & NRF24L01
+	PROTO_FRSKYA	= 112,	// =>CC2500
 	
 	PROTO_NANORF	= 126,	// =>NRF24L01
 	PROTO_TEST		= 127,	// =>CC2500
@@ -283,6 +284,13 @@ enum FRSKYD
 	FRSKYD	= 0,
 	DCLONE	= 1,
 };
+enum FRSKYA
+{
+	A_16		= 0,
+	A_8		= 1,
+	A_EU16	= 2,
+	A_EU8	= 3,
+};
 enum FRSKYX
 {
 	CH_16		= 0,
@@ -425,6 +433,13 @@ enum FQ777
 {
 	FQ777	= 0,
 	XBM37	= 1,
+};
+enum FUTABA
+{
+	SFHSS		= 0,
+	TFHSS		= 1,
+	TFHSS_SR	= 2,
+	TFHSS_AIR	= 3,
 };
 enum FRSKY_RX
 {
@@ -595,6 +610,7 @@ enum MultiPacketTypes
 	MULTI_TELEMETRY_CONFIG			= 16,
 	MULTI_TELEMETRY_PROTO			= 17,
 	MULTI_TELEMETRY_RLINK			= 18,
+	MULTI_TELEMETRY_FUTABA			= 19,
 };
 
 // Macros
@@ -892,7 +908,8 @@ enum {
 #define TRAXXAS_EEPROM_OFFSET	1079	// RX ID and SOP index, 3 bytes per model id, end is 1079+192=1271
 #define XK2_EEPROM_OFFSET		1271	// RX ID checksum, 1 byte per model, end is 1271+64=1335
 #define JIABAILE_EEPROM_OFFSET	1335	// RX ID, 3 bytes per model, end is 1335+64*3=1527
-//#define CONFIG_EEPROM_OFFSET 	1527	// Current configuration of the multimodule
+#define TFHSS_EEPROM_OFFSET		1527	// RX ID, 4 bytes per model, end is 1527+64*4=1783
+//#define CONFIG_EEPROM_OFFSET 	1783	// Current configuration of the multimodule
 
 /* STM32 Flash Size */
 #ifndef DISABLE_FLASH_SIZE_CHECK
@@ -1210,6 +1227,11 @@ Serial: 100000 Baud 8e2      _ xxxx xxxx p --
 		sub_protocol==JJRC345
 			JJRC345		0
 			SKYTMBLR	1
+		sub_protocol==FUTABA
+			SFHSS		0
+			TFHSS		1
+			TFHSS_SR	2
+			TFHSS_AIR	3
 		sub_protocol==RLINK
 			RLINK_SURFACE	0
 			RLINK_AIR		1
@@ -1398,5 +1420,14 @@ Serial: 100000 Baud 8e2      _ xxxx xxxx p --
   Type 0x12 RadioLink/DumboRC P raw command payload
    length: variable
    data[0..] = raw command payload, used to send failsafe and gyro settings
+
+  Type 0x13 Futaba telemetry (T-FHSS): S.BUS2 slots as the sensors send them
+   length: variable, 3 + 2 x number of slots
+   data[0] = number of the first slot (0..31)
+   data[1] = RSSI of the receiver's reply at the module in dBm (signed)
+   data[2] = link quality % sent by the receiver, 0xFF if none in this reply
+   data[3..] = 2 bytes per slot as on the S.BUS2 bus. Slot 0 is the
+               receiver's: byte 0 bits 7..6 = link quality bars (0..3),
+               bit 2 = 0: byte 1 = its voltage in 0.1 V
 
 */
